@@ -5,7 +5,7 @@ using Cinemachine;
 public class CarDriveIn : MonoBehaviour
 {
     [Header("移动设置")]
-    public Vector3 startPosition;
+    public Vector3 startPosition;//检查测试
     public Vector3 stopPosition;
     public float driveSpeed = 5f;
 
