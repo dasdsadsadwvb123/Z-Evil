@@ -26,10 +26,24 @@ public class Gun : MonoBehaviour
 
         if (Input.GetKeyDown(fireKey) && Time.time >= lastFireTime + gunData.fireRate)
         {
-           Fire(gunData);
+            // 远程武器开枪前必须先消耗一发子弹（近战小刀不需要弹药）
+            if (gunData.range > 1f && !inventory.ConsumeAmmo())
+            {
+                // 弹药为 0：空仓咔嗒，禁止开枪
+                DryFire();
+                return;
+            }
+
+            Fire(gunData);
             if (gunData.range > 1f) playerMovement?.PlayShoot();
-           lastFireTime = Time.time;
+            lastFireTime = Time.time;
         }
+    }
+
+    /// <summary> 弹尽时触发：空仓提示（以后可以在这里播放"咔嗒"音效） </summary>
+    private void DryFire()
+    {
+        Debug.Log("[弹药] 咔嗒…… 没子弹了！");
     }
 
     private void Fire(GunData gunData)

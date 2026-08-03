@@ -8,4 +8,7 @@ public class GunData : ScriptableObject
     public float fireRate = 0.5f;
     public float range = 8f;
     public Sprite icon;
+
+    [Tooltip("这把枪的弹药上限（满弹量）")]
+    public int maxAmmo = 15;
 }
