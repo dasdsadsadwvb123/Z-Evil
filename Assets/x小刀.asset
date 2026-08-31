@@ -17,3 +17,5 @@ MonoBehaviour:
   fireRate: 0.5
   range: 0.5
   icon: {fileID: 0}
+  maxAmmo: 15
+  maxDurability: 30

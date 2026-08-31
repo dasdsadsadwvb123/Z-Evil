@@ -14,8 +14,8 @@ public class PlayerPickup : MonoBehaviour
     public string promptText = "按F拾取";
 
     private Inventory inventory;
-   private PickupItem nearestItem;
-   private GameObject promptUI;
+    private PickupItem nearestItem;
+    private GameObject promptUI;
     private PixelGridMovement playerMovement;
 
    private void Start()

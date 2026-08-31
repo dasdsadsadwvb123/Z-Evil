@@ -33,10 +33,10 @@ public class Inventory : MonoBehaviour
 
     public void AddItem(PickupItem pickup)
     {
-        // 弹药包不占背包格子，直接给装备中的枪补弹
+        // 弹药包不占背包格子，直接加入"备用弹药池"（按弹药类型分池子）
         if (pickup.itemType == ItemType.Ammo)
         {
-            AddAmmoToEquippedGun(pickup.ammoAmount);
+            AddReserveAmmo(pickup.ammoType, pickup.ammoAmount);
             return;
         }
 
@@ -50,12 +50,15 @@ public class Inventory : MonoBehaviour
             gunData = pickup.gunData
         };
 
-        // 如果是枪：把 GunData 的满弹量复制到"运行时"字段，初始为满弹
+        // 如果是武器：把 GunData 的上限复制到"运行时"字段，拾取时弹夹是满的
         if (item.gunData != null)
         {
-            item.maxAmmo = item.gunData.maxAmmo;
-            item.currentAmmo = item.maxAmmo;
-            Debug.Log("[弹药] 拾取 " + item.itemName + "，满弹 " + item.currentAmmo + "/" + item.maxAmmo + " 发");
+            item.magSize = item.gunData.magSize;
+            item.currentAmmo = item.magSize;
+            item.maxDurability = item.gunData.maxDurability;
+            item.currentDurability = item.maxDurability;
+            Debug.Log("[武器] 拾取 " + item.itemName + "，弹夹 " + item.currentAmmo + "/" + item.magSize
+                + "，耐久 " + item.currentDurability + "/" + item.maxDurability);
         }
 
         items.Add(item);
@@ -65,24 +68,62 @@ public class Inventory : MonoBehaviour
         onChanged?.Invoke();
     }
 
-    /// <summary>
-    /// 给当前装备的枪补充弹药（弹药包拾取时调用）。
-    /// 返回 true 表示成功补弹，false 表示没有可补弹的枪。
-    /// </summary>
-    public bool AddAmmoToEquippedGun(int amount)
+    // ======== 备用弹药池（拾取弹药包后存入这里，换弹时转入弹夹） ========
+    // 每种弹药一个独立池子：手枪、霰弹、沙漠之鹰的弹药互不通用
+
+    public int reservePistol = 0;   // 手枪备用弹药
+    public int reserveShotgun = 0;  // 霰弹枪备用弹药
+    public int reserveEagle = 0;    // 沙漠之鹰备用弹药
+
+    /// <summary> 查询某种弹药的备用数量 </summary>
+    public int GetReserveAmmo(AmmoType type)
+    {
+        switch (type)
+        {
+            case AmmoType.Pistol:  return reservePistol;
+            case AmmoType.Shotgun: return reserveShotgun;
+            case AmmoType.Eagle:   return reserveEagle;
+            default:               return 0;
+        }
+    }
+
+    /// <summary> 增加（或扣除，传负数）某种备用弹药。数量不会低于 0 </summary>
+    public void AddReserveAmmo(AmmoType type, int amount)
+    {
+        switch (type)
+        {
+            case AmmoType.Pistol:  reservePistol  = Mathf.Max(0, reservePistol  + amount); break;
+            case AmmoType.Shotgun: reserveShotgun = Mathf.Max(0, reserveShotgun + amount); break;
+            case AmmoType.Eagle:   reserveEagle   = Mathf.Max(0, reserveEagle   + amount); break;
+        }
+        Debug.Log("[弹药] " + type + " 备用弹药 → " + GetReserveAmmo(type));
+        onChanged?.Invoke();
+    }
+
+    /// <summary> 能不能换弹？条件：装备了枪 + 弹夹没满 + 有备用弹药 </summary>
+    public bool CanReload()
     {
         InventoryItem equipped = GetEquippedItem();
-        if (equipped == null || equipped.gunData == null)
-        {
-            Debug.Log("[弹药] 没有装备枪械，无法补充弹药！");
-            return false;
-        }
+        if (equipped == null || equipped.gunData == null) return false;
+        if (equipped.currentAmmo >= equipped.magSize) return false; // 弹夹已满，不用换
+        return GetReserveAmmo(equipped.gunData.ammoType) > 0;       // 有备用弹药才能换
+    }
 
-        int before = equipped.currentAmmo;
-        // 补弹但不超过上限：比如当前 3 发，捡到 10 发，上限 15 → 变成 13 发
-        equipped.currentAmmo = Mathf.Min(equipped.maxAmmo, equipped.currentAmmo + amount);
-        int gained = equipped.currentAmmo - before;
-        Debug.Log("[弹药] " + equipped.itemName + " 补充 " + gained + " 发 → " + equipped.currentAmmo + "/" + equipped.maxAmmo);
+    /// <summary> 执行换弹：从备用弹药池补满弹夹（换弹动画/音效由 Gun.cs 负责） </summary>
+    public bool CompleteReload()
+    {
+        InventoryItem equipped = GetEquippedItem();
+        if (equipped == null || equipped.gunData == null) return false;
+
+        AmmoType type = equipped.gunData.ammoType;
+        int need = equipped.magSize - equipped.currentAmmo;   // 弹夹还差几发
+        int take = Mathf.Min(need, GetReserveAmmo(type));     // 能从备用池取多少
+        if (take <= 0) return false;                          // 没得换
+
+        equipped.currentAmmo += take;                         // 弹夹补上
+        AddReserveAmmo(type, -take);                          // 备用池扣除
+        Debug.Log("[换弹] " + equipped.itemName + " → " + equipped.currentAmmo + "/" + equipped.magSize
+            + "（备用剩 " + GetReserveAmmo(type) + "）");
         onChanged?.Invoke();
         return true;
     }
@@ -102,6 +143,19 @@ public class Inventory : MonoBehaviour
         if (equipped == null || equipped.gunData == null) return false;
         if (equipped.currentAmmo <= 0) return false;
         equipped.currentAmmo--;
+        onChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary> 近战武器消耗 1 点耐久。返回 false 表示耐久耗尽，不能攻击。
+    /// maxDurability <= 0 表示无限耐久，永远返回 true（不消耗） </summary>
+    public bool ConsumeDurability()
+    {
+        InventoryItem equipped = GetEquippedItem();
+        if (equipped == null || equipped.gunData == null) return false;
+        if (equipped.maxDurability <= 0) return true;      // 无限耐久，随便打
+        if (equipped.currentDurability <= 0) return false; // 耐久耗尽
+        equipped.currentDurability--;
         onChanged?.Invoke();
         return true;
     }

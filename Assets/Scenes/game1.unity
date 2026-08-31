@@ -1381,6 +1381,7 @@ MonoBehaviour:
   description: 
   destroyOnPickup: 1
   gunData: {fileID: 11400000, guid: df9d025c7c472bf469d805f4ba97604c, type: 2}
+  ammoType: 1
   ammoAmount: 10
 --- !u!212 &734855848
 SpriteRenderer:
@@ -2042,6 +2043,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   firePoint: {fileID: 0}
+  reloadKey: 114
+  reloadDuration: 1.5
+  reloadClip: {fileID: 8300000, guid: 7a83f9c6ed677ef42a8842db814a3936, type: 3}
 --- !u!114 &890881205
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2074,6 +2078,9 @@ MonoBehaviour:
   gridColumns: 4
   items: []
   equippedIndex: -1
+  reservePistol: 0
+  reserveShotgun: 0
+  reserveEagle: 0
 --- !u!114 &890881207
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2086,6 +2093,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aab9bb9cf0d044544800bdb75a514618, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  displayDuration: 3
 --- !u!1 &940399710
 GameObject:
   m_ObjectHideFlags: 0
@@ -3391,6 +3399,7 @@ MonoBehaviour:
   description: 
   destroyOnPickup: 1
   gunData: {fileID: 0}
+  ammoType: 1
   ammoAmount: 10
 --- !u!212 &1164336022
 SpriteRenderer:
