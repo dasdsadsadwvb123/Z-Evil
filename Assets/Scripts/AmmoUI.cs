@@ -3,7 +3,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 武器 HUD：屏幕右下角显示当前装备武器的弹药/耐久。
-/// 平时隐藏（黑框不常驻），装备武器/开枪/换枪时出现，3 秒后自动消失。
+/// 3 秒留存：开枪/拾取/换枪/换弹时出现，3 秒后自动隐藏。
+/// 场景切换后：检测到"背包恢复出武器"也会主动显示 3 秒（修复跨场景不显示的 bug）。
 /// 挂到玩家（Player）物体上，需要和 Inventory 在同一个物体。
 /// </summary>
 public class AmmoUI : MonoBehaviour
@@ -17,6 +18,7 @@ public class AmmoUI : MonoBehaviour
     private Text ammoText;
     private GameObject bgGO;      // 底板引用，用于整块显隐
     private float lastShowTime;   // 上次"重新显示"的时间点
+    private bool lastHadWeapon = false; // 上一帧是否装备了武器（用于检测状态变化）
 
     private void Start()
     {
@@ -24,11 +26,14 @@ public class AmmoUI : MonoBehaviour
         gun = GetComponent<Gun>();
         CreateAmmoUI();
 
-        // 订阅背包事件：开枪扣弹、换武器、补弹、拾取都会触发 onChanged
+        // 订阅背包事件：开枪扣弹、换武器、补弹、拾取都会触发 onChanged → 显示 3 秒
         if (inventory != null)
             inventory.onChanged += OnInventoryChanged;
 
         // 开局如果有装备武器，先显示一轮（否则要等第一次操作才出现）
+        Debug.Log("[AmmoUI] Start: items=" + (inventory != null ? inventory.items.Count : -1)
+            + " equippedIndex=" + (inventory != null ? inventory.equippedIndex : -1)
+            + " HasWeapon=" + HasWeapon());
         if (HasWeapon())
             ShowTemporarily();
     }
@@ -40,7 +45,7 @@ public class AmmoUI : MonoBehaviour
             inventory.onChanged -= OnInventoryChanged;
     }
 
-    /// <summary> 背包有任何变化（开枪/换枪/补弹）→ 显示 HUD 并刷新 3 秒计时 </summary>
+    /// <summary> 背包有任何变化（开枪/换枪/补弹/拾取）→ 显示 HUD 并刷新 3 秒计时 </summary>
     private void OnInventoryChanged()
     {
         ShowTemporarily();
@@ -106,6 +111,18 @@ public class AmmoUI : MonoBehaviour
     private void Update()
     {
         if (inventory == null || ammoText == null || bgGO == null) return;
+
+        // ★ 装备状态变化检测（修复场景切换后不显示）：
+        // 场景切换后背包恢复出武器（从"没武器"变成"有武器"）→ 主动显示 3 秒。
+        // 即使 Start 时机的判断失败，这里也能兜住。
+        bool hasWeapon = HasWeapon();
+        if (hasWeapon != lastHadWeapon)
+            Debug.Log("[AmmoUI] 装备状态变化: " + (hasWeapon ? "有武器" : "无武器")
+                + " | items=" + inventory.items.Count
+                + " equippedIndex=" + inventory.equippedIndex);
+        if (hasWeapon && !lastHadWeapon)
+            ShowTemporarily();
+        lastHadWeapon = hasWeapon;
 
         // 读取当前装备的物品条目
         InventoryItem equipped = inventory.GetEquippedItem();

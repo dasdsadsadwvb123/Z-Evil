@@ -16,6 +16,7 @@ public class PlayerPickup : MonoBehaviour
     private Inventory inventory;
     private PickupItem nearestItem;
     private GameObject promptUI;
+    private Text promptTextUI;   // 提示文字引用（用于关键物品变色）
     private PixelGridMovement playerMovement;
 
    private void Start()
@@ -47,12 +48,12 @@ public class PlayerPickup : MonoBehaviour
 
         GameObject textGO = new GameObject("Text");
         textGO.transform.SetParent(bg.transform, false);
-        Text t = textGO.AddComponent<Text>();
-        t.text = promptText;
-        t.fontSize = 20;
-        t.color = Color.white;
-        t.alignment = TextAnchor.MiddleCenter;
-        t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        promptTextUI = textGO.AddComponent<Text>();
+        promptTextUI.text = promptText;
+        promptTextUI.fontSize = 20;
+        promptTextUI.color = Color.white;
+        promptTextUI.alignment = TextAnchor.MiddleCenter;
+        promptTextUI.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         RectTransform textRect = textGO.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
@@ -72,12 +73,21 @@ public class PlayerPickup : MonoBehaviour
         {
             promptUI.SetActive(true);
 
+            // 关键物品：提示文字变金色，强化"这是重要东西"的引导
+            if (promptTextUI != null)
+                promptTextUI.color = nearestItem.isKeyItem ? new Color(1f, 0.85f, 0.3f) : Color.white;
+
             if (Input.GetKeyDown(interactKey))
             {
                inventory.AddItem(nearestItem);
                 playerMovement?.PlayFlash();
                if (nearestItem.destroyOnPickup)
+               {
+                    // 记录"已拾取"，防止场景重载后物品复活（防刷物品）。
+                    // 没填 itemID 时用物体名兜底（防止弹药包之类无限刷）
+                    SaveSystem.CollectItem(nearestItem.itemID, nearestItem.gameObject.name);
                     Destroy(nearestItem.gameObject);
+               }
             }
         }
         else

@@ -2,6 +2,11 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 
+/// <summary>
+/// 背包 UI：Tab 打开 → WASD 选物品 → 空格操作。
+/// 新增：草药物品按空格弹【操作菜单】（使用/合成/取消），合成面板只显示材料够的配方。
+/// 保留原有：枪装备、Tab 关闭、时间暂停等逻辑。
+/// </summary>
 public class InventoryUI : MonoBehaviour
 {
     [Header("按键")]
@@ -20,6 +25,23 @@ public class InventoryUI : MonoBehaviour
     private bool isOpen = false;
     private List<GameObject> slotObjs = new List<GameObject>();
 
+    // ======== 状态机：网格 → 操作菜单 → 合成面板 ========
+    private enum UIState { Grid, Menu, Combine }
+    private UIState uiState = UIState.Grid;
+
+    private GameObject menuPanel;                 // 操作菜单（使用/合成/取消）
+    private List<Text> menuOptionTexts = new List<Text>();
+    private List<string> menuOptions = new List<string>();
+    private int menuSelected = 0;
+
+    private GameObject combinePanel;              // 合成面板
+    private List<Text> combineOptionTexts = new List<Text>();
+    private List<Inventory.CombineRecipe> combineList = new List<Inventory.CombineRecipe>();
+    private int combineSelected = 0;
+
+    private string pendingMessage = null;         // 提示消息（使用/合成结果）
+    private float messageUntil = 0f;              // 消息显示到什么时候
+
     private void Start()
     {
         inventory = GetComponent<Inventory>();
@@ -35,11 +57,24 @@ public class InventoryUI : MonoBehaviour
 
         if (!isOpen) return;
 
+        // 按当前界面状态分发按键处理
+        switch (uiState)
+        {
+            case UIState.Grid:    HandleGridInput();    break;
+            case UIState.Menu:    HandleMenuInput();    break;
+            case UIState.Combine: HandleCombineInput(); break;
+        }
+    }
+
+    // ======== 状态1：背包网格（原有 WASD 选择 + 空格操作） ========
+
+    private void HandleGridInput()
+    {
         int cols = columns;
         int total = inventory.items.Count;
         if (total == 0) return;
 
-        // WASD navigation
+        // WASD 选择（原有逻辑）
         if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
         {
             int target = selectedIndex - cols;
@@ -63,32 +98,220 @@ public class InventoryUI : MonoBehaviour
             UpdateSelection();
         }
 
+        // 空格：按物品类型处理
         if (Input.GetKeyDown(useKey))
         {
             InventoryItem item = inventory.GetItemAt(selectedIndex);
-            if (item != null)
+            if (item == null) return;
+
+            // 枪 → 直接装备（原有逻辑）
+            if (item.itemType == ItemType.Gun)
             {
-                if (item.itemType == ItemType.Gun)
-                {
-                    inventory.EquipAt(selectedIndex);
-                    Close();
-                    return;
-                }
-                else
-                {
-                    Debug.Log("[背包] " + item.itemName + ": " + item.description);
-                    Close();
-                    return;
-                }
+                inventory.EquipAt(selectedIndex);
+                Close();
+                return;
+            }
+
+            // 草药 → 弹操作菜单（使用/合成/取消）
+            if (item.itemType == ItemType.Herb)
+            {
+                OpenMenuFor(item);
+                return;
+            }
+
+            // 其他物品（钥匙/宝石/说明书）→ 显示描述
+            ShowInfoMessage("<b>" + item.itemName + "</b>\n" + item.description);
+        }
+    }
+
+    // ======== 状态2：操作菜单 ========
+
+    /// <summary> 为选中的草药构建菜单选项并打开菜单 </summary>
+    private void OpenMenuFor(InventoryItem item)
+    {
+        menuOptions.Clear();
+
+        // "使用"：草药都能选（红草选了会提示不能直接用）
+        menuOptions.Add("使用");
+
+        // "合成"：背包里有可用的配方才显示（只有可合成的才能出现）
+        if (inventory.GetAvailableRecipes().Count > 0)
+            menuOptions.Add("合成");
+
+        menuOptions.Add("取消");
+
+        menuSelected = 0;
+        uiState = UIState.Menu;
+        menuPanel.SetActive(true);
+        RefreshMenuUI();
+    }
+
+    private void HandleMenuInput()
+    {
+        // W/S 上下选择（循环）
+        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            menuSelected = (menuSelected - 1 + menuOptions.Count) % menuOptions.Count;
+            RefreshMenuUI();
+        }
+        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            menuSelected = (menuSelected + 1) % menuOptions.Count;
+            RefreshMenuUI();
+        }
+
+        // Esc 返回网格
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            BackToGrid();
+            return;
+        }
+
+        // 空格确认
+        if (Input.GetKeyDown(useKey))
+        {
+            string option = menuOptions[menuSelected];
+            if (option == "使用")
+            {
+                string msg = inventory.UseItem(selectedIndex);
+                if (msg != null) ShowInfoMessage(msg);
+                BackToGrid();
+                RefreshSlots(); // 物品可能被用掉了，刷新格子
+            }
+            else if (option == "合成")
+            {
+                OpenCombinePanel();
+            }
+            else if (option == "取消")
+            {
+                BackToGrid();
             }
         }
     }
+
+    /// <summary> 回到背包网格，隐藏所有面板 </summary>
+    private void BackToGrid()
+    {
+        uiState = UIState.Grid;
+        if (menuPanel != null) menuPanel.SetActive(false);
+        if (combinePanel != null) combinePanel.SetActive(false);
+        UpdateInfo();
+    }
+
+    private void RefreshMenuUI()
+    {
+        for (int i = 0; i < menuOptionTexts.Count; i++)
+        {
+            if (i < menuOptions.Count)
+            {
+                menuOptionTexts[i].gameObject.SetActive(true);
+                menuOptionTexts[i].text = (i == menuSelected ? "▶ " : "  ") + menuOptions[i];
+                menuOptionTexts[i].color = (i == menuSelected) ? Color.yellow : Color.white;
+            }
+            else
+            {
+                menuOptionTexts[i].gameObject.SetActive(false);
+            }
+        }
+    }
+
+    // ======== 状态3：合成面板 ========
+
+    private void OpenCombinePanel()
+    {
+        // 刷新可用配方（材料够的才出现）
+        combineList = inventory.GetAvailableRecipes();
+        if (combineList.Count == 0)
+        {
+            ShowInfoMessage("没有可合成的配方（需要绿草 + 红草）");
+            return;
+        }
+
+        combineSelected = 0;
+        uiState = UIState.Combine;
+        combinePanel.SetActive(true);
+        RefreshCombineUI();
+    }
+
+    private void HandleCombineInput()
+    {
+        // W/S 选择配方（循环）
+        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            combineSelected = (combineSelected - 1 + combineList.Count) % combineList.Count;
+            RefreshCombineUI();
+        }
+        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            combineSelected = (combineSelected + 1) % combineList.Count;
+            RefreshCombineUI();
+        }
+
+        // Esc 返回网格
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            BackToGrid();
+            return;
+        }
+
+        // 空格合成
+        if (Input.GetKeyDown(useKey))
+        {
+            Inventory.CombineRecipe recipe = combineList[combineSelected];
+            if (inventory.TryCombine(recipe))
+            {
+                ShowInfoMessage("合成成功：" + recipe.resultName + "！");
+                RefreshSlots(); // 材料被消耗，刷新格子
+
+                // 刷新配方列表（材料可能不够了）
+                combineList = inventory.GetAvailableRecipes();
+                if (combineList.Count == 0)
+                {
+                    BackToGrid();
+                    return;
+                }
+                combineSelected = Mathf.Min(combineSelected, combineList.Count - 1);
+                RefreshCombineUI();
+            }
+        }
+    }
+
+    private void RefreshCombineUI()
+    {
+        for (int i = 0; i < combineOptionTexts.Count; i++)
+        {
+            if (i < combineList.Count)
+            {
+                combineOptionTexts[i].gameObject.SetActive(true);
+                Inventory.CombineRecipe r = combineList[i];
+                combineOptionTexts[i].text = (i == combineSelected ? "▶ " : "  ") + r.recipeName + " → " + r.resultName;
+                combineOptionTexts[i].color = (i == combineSelected) ? Color.yellow : Color.white;
+            }
+            else
+            {
+                combineOptionTexts[i].gameObject.SetActive(false);
+            }
+        }
+    }
+
+    // ======== 消息提示（使用/合成结果，显示 2 秒） ========
+
+    private void ShowInfoMessage(string msg)
+    {
+        pendingMessage = msg;
+        messageUntil = Time.unscaledTime + 2f; // 用 unscaledTime，暂停时也计时
+        UpdateInfo();
+    }
+
+    // ======== 原有逻辑（保留）：开关、UI 创建、格子刷新 ========
 
     private void Open()
     {
         if (isOpen) return;
         isOpen = true;
         Time.timeScale = 0f;
+        uiState = UIState.Grid;
+        pendingMessage = null;
         CreateUI();
     }
 
@@ -143,7 +366,7 @@ public class InventoryUI : MonoBehaviour
         GameObject tip = new GameObject("Tip");
         tip.transform.SetParent(canvasObj.transform, false);
         Text tipText = tip.AddComponent<Text>();
-        tipText.text = "WASD 选择 | 空格 使用 | Tab 关闭";
+        tipText.text = "WASD 选择 | 空格 使用/合成 | Tab 关闭";
         tipText.fontSize = 20;
         tipText.color = Color.white;
         tipText.alignment = TextAnchor.MiddleCenter;
@@ -170,8 +393,116 @@ public class InventoryUI : MonoBehaviour
         infoRect.anchoredPosition = new Vector2(0, -20f);
         infoRect.sizeDelta = new Vector2(600, 100);
 
+        // 新增：操作菜单面板（默认隐藏）
+        CreateMenuPanel();
+
+        // 新增：合成面板（默认隐藏）
+        CreateCombinePanel();
+
         selectedIndex = 0;
         RefreshSlots();
+    }
+
+    /// <summary> 创建操作菜单（使用/合成/取消） </summary>
+    private void CreateMenuPanel()
+    {
+        menuPanel = new GameObject("MenuPanel");
+        menuPanel.transform.SetParent(canvasObj.transform, false);
+        Image bg = menuPanel.AddComponent<Image>();
+        bg.color = new Color(0.1f, 0.1f, 0.1f, 0.92f);
+        RectTransform rect = menuPanel.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0, 0);
+        rect.sizeDelta = new Vector2(300, 180);
+
+        menuOptionTexts.Clear();
+        for (int i = 0; i < 3; i++)
+        {
+            GameObject option = new GameObject("Option_" + i);
+            option.transform.SetParent(menuPanel.transform, false);
+            Text t = option.AddComponent<Text>();
+            t.fontSize = 22;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            RectTransform oRect = option.GetComponent<RectTransform>();
+            oRect.anchorMin = new Vector2(0f, 1f);
+            oRect.anchorMax = new Vector2(1f, 1f);
+            oRect.pivot = new Vector2(0.5f, 1f);
+            oRect.anchoredPosition = new Vector2(0, -10f - i * 55f);
+            oRect.sizeDelta = new Vector2(280, 45);
+            menuOptionTexts.Add(t);
+        }
+        menuPanel.SetActive(false);
+    }
+
+    /// <summary> 创建合成面板（标题 + 配方列表 + 提示） </summary>
+    private void CreateCombinePanel()
+    {
+        combinePanel = new GameObject("CombinePanel");
+        combinePanel.transform.SetParent(canvasObj.transform, false);
+        Image bg = combinePanel.AddComponent<Image>();
+        bg.color = new Color(0.1f, 0.1f, 0.1f, 0.92f);
+        RectTransform rect = combinePanel.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0, 0);
+        rect.sizeDelta = new Vector2(420, 300);
+
+        // 标题
+        GameObject title = new GameObject("Title");
+        title.transform.SetParent(combinePanel.transform, false);
+        Text titleText = title.AddComponent<Text>();
+        titleText.text = "=== 合 成 ===";
+        titleText.fontSize = 24;
+        titleText.color = Color.yellow;
+        titleText.alignment = TextAnchor.MiddleCenter;
+        titleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        RectTransform titleRect = title.GetComponent<RectTransform>();
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.pivot = new Vector2(0.5f, 1f);
+        titleRect.anchoredPosition = new Vector2(0, -10f);
+        titleRect.sizeDelta = new Vector2(400, 40);
+
+        // 配方列表（预创建 5 个槽，按需显示）
+        combineOptionTexts.Clear();
+        for (int i = 0; i < 5; i++)
+        {
+            GameObject option = new GameObject("Recipe_" + i);
+            option.transform.SetParent(combinePanel.transform, false);
+            Text t = option.AddComponent<Text>();
+            t.fontSize = 20;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            RectTransform oRect = option.GetComponent<RectTransform>();
+            oRect.anchorMin = new Vector2(0f, 1f);
+            oRect.anchorMax = new Vector2(1f, 1f);
+            oRect.pivot = new Vector2(0.5f, 1f);
+            oRect.anchoredPosition = new Vector2(0, -60f - i * 45f);
+            oRect.sizeDelta = new Vector2(400, 40);
+            combineOptionTexts.Add(t);
+        }
+
+        // 底部提示
+        GameObject hint = new GameObject("Hint");
+        hint.transform.SetParent(combinePanel.transform, false);
+        Text hintText = hint.AddComponent<Text>();
+        hintText.text = "W/S 选择 | 空格 合成 | Esc 返回";
+        hintText.fontSize = 16;
+        hintText.color = Color.gray;
+        hintText.alignment = TextAnchor.MiddleCenter;
+        hintText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        RectTransform hintRect = hint.GetComponent<RectTransform>();
+        hintRect.anchorMin = new Vector2(0f, 0f);
+        hintRect.anchorMax = new Vector2(1f, 0f);
+        hintRect.pivot = new Vector2(0.5f, 0f);
+        hintRect.anchoredPosition = new Vector2(0, 10f);
+        hintRect.sizeDelta = new Vector2(400, 30);
+
+        combinePanel.SetActive(false);
     }
 
     private void RefreshSlots()
@@ -244,6 +575,16 @@ public class InventoryUI : MonoBehaviour
         Transform infoT = canvasObj?.transform.Find("Info");
         if (infoT == null) return;
         Text t = infoT.GetComponent<Text>();
+
+        // 有提示消息且没过期 → 显示消息
+        if (pendingMessage != null && Time.unscaledTime < messageUntil)
+        {
+            t.text = pendingMessage;
+            return;
+        }
+        pendingMessage = null;
+
+        // 正常显示选中物品信息
         InventoryItem item = inventory.GetItemAt(selectedIndex);
         if (item != null)
             t.text = "<b>" + item.itemName + "</b>\n" + item.description;

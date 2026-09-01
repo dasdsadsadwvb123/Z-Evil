@@ -52,6 +52,25 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
+    /// <summary> 恢复生命（草药使用/其他回血手段调用）。不会超过最大血量 </summary>
+    public void Heal(int amount)
+    {
+        if (isDead || amount <= 0) return;
+
+        int before = currentHealth;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+        int gained = currentHealth - before;
+
+        if (gained > 0)
+        {
+            Debug.Log("[血量] 恢复 " + gained + " 点 → " + currentHealth + "/" + maxHealth);
+        }
+        else
+        {
+            Debug.Log("[血量] 生命值已满，没有恢复！");
+        }
+    }
+
     private IEnumerator InvincibleFrames()
     {
         isInvincible = true;

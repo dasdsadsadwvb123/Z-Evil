@@ -3,11 +3,28 @@ using UnityEngine;
 
 public class Inventory : MonoBehaviour
 {
+    /// <summary> 物品模板：itemID 对应的图标/描述（读档恢复图标用） </summary>
+    [System.Serializable]
+    public class ItemTemplate
+    {
+        public string itemID;       // 和场景里 PickupItem 的 itemID 一致
+        public Sprite icon;         // 这个物品的图标
+        [TextArea] public string description; // 描述（可选，读档时补）
+    }
+
     private static List<InventoryItem> savedItems = null;
     private static int savedEquipped = -1;
 
     [Header("背包设置")]
     public int gridColumns = 4;
+
+    [Header("枪数据注册表")]
+    [Tooltip("把项目里所有枪的 GunData 拖进来（存档读档时按名字找回枪的引用用）")]
+    public GunData[] allGunDatas;
+
+    [Header("物品模板表")]
+    [Tooltip("配置每个物品的图标（读档后图标会从 JSON 丢失，靠这里按 itemID 找回）。钥匙/宝石/草药等都配上")]
+    public ItemTemplate[] itemTemplates;
 
     public List<InventoryItem> items = new List<InventoryItem>();
     public int equippedIndex = -1;
@@ -16,6 +33,8 @@ public class Inventory : MonoBehaviour
 
     private void Awake()
     {
+        InitDefaultRecipes(); // 预填默认合成配方（绿草+红草=红绿草）
+
         if (savedItems != null)
         {
             items = savedItems;
@@ -25,10 +44,28 @@ public class Inventory : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 清空跨场景静态快照（死亡重开/全新开始时调用）。
+    /// 防止"没存档却因为旧快照继承背包物品"的问题。
+    /// </summary>
+    public static void ResetStaticState()
+    {
+        savedItems = null;
+        savedEquipped = -1;
+    }
+
     private void SaveState()
     {
         savedItems = new List<InventoryItem>(items);
         savedEquipped = equippedIndex;
+    }
+
+    /// <summary>
+    /// 手动刷新跨场景静态快照（读档恢复背包后调用，防止以后切场景被旧快照覆盖）
+    /// </summary>
+    public void RefreshSaveState()
+    {
+        SaveState();
     }
 
     public void AddItem(PickupItem pickup)
@@ -47,7 +84,9 @@ public class Inventory : MonoBehaviour
             itemType = pickup.itemType,
             icon = pickup.icon,
             description = pickup.description,
-            gunData = pickup.gunData
+            gunData = pickup.gunData,
+            herbType = pickup.herbType,
+            healAmount = pickup.healAmount
         };
 
         // 如果是武器：把 GunData 的上限复制到"运行时"字段，拾取时弹夹是满的
@@ -182,5 +221,177 @@ public class Inventory : MonoBehaviour
         if (index >= 0 && index < items.Count)
             return items[index];
         return null;
+    }
+
+    /// <summary> 按 itemID 查找物品模板（读档恢复图标/描述用），找不到返回 null </summary>
+    public ItemTemplate GetTemplate(string itemID)
+    {
+        if (itemTemplates == null || string.IsNullOrEmpty(itemID)) return null;
+        foreach (ItemTemplate t in itemTemplates)
+        {
+            if (t != null && t.itemID == itemID) return t;
+        }
+        return null;
+    }
+
+    // ======== 物品使用（草药回血） ========
+
+    /// <summary>
+    /// 使用背包里指定位置的物品。
+    /// 返回提示信息（UI 显示用），null 表示"不需要提示"。
+    /// </summary>
+    public string UseItem(int index)
+    {
+        InventoryItem item = GetItemAt(index);
+        if (item == null) return null;
+
+        // 只有草药类走使用逻辑
+        if (item.itemType != ItemType.Herb) return null;
+
+        // 红草不能直接用，引导去合成
+        if (item.herbType == HerbType.Red)
+            return "红草不能直接使用，需要和绿草混合！";
+
+        // 绿草 / 红绿草：回血
+        HealthSystem health = GetComponent<HealthSystem>();
+        if (health == null) return "没有血量系统，无法使用！";
+        if (health.currentHealth >= health.maxHealth)
+            return "生命值已满，不需要使用！";
+
+        health.Heal(item.healAmount);
+        RemoveItemAt(index); // 用掉 1 个
+        return "使用 " + item.itemName + "，恢复 " + item.healAmount + " 点生命！";
+    }
+
+    /// <summary> 移除指定位置的物品（使用/合成消耗时调用）。会修正装备索引 </summary>
+    public void RemoveItemAt(int index)
+    {
+        if (index < 0 || index >= items.Count) return;
+        items.RemoveAt(index);
+
+        // 修正装备索引：如果删的是装备中的枪
+        if (equippedIndex >= items.Count) equippedIndex = -1;
+        else if (equippedIndex > index) equippedIndex--;
+
+        SaveState();
+        onChanged?.Invoke();
+    }
+
+    // ======== 合成系统（雏形：目前只有 绿草+红草=红绿草） ========
+
+    /// <summary> 配方数据类：材料A + 材料B → 产物 </summary>
+    [System.Serializable]
+    public class CombineRecipe
+    {
+        [Tooltip("配方名字（合成面板显示）")]
+        public string recipeName = "绿草 + 红草";
+
+        [Header("材料（按 itemID 匹配，场景里的草药 PickupItem 填好 itemID）")]
+        public string materialA_ID = "GreenHerb";
+        public string materialB_ID = "RedHerb";
+
+        [Header("产物")]
+        public string resultID = "MixedHerb";
+        public string resultName = "红绿草";
+        public Sprite resultIcon;
+        [TextArea] public string resultDescription = "混合了两种草药的药剂，恢复效果更强。";
+        public HerbType resultHerbType = HerbType.Mixed;
+        public int resultHealAmount = 3;
+    }
+
+    [Header("合成配方表（Inspector 可加新配方）")]
+    public List<CombineRecipe> recipes = new List<CombineRecipe>();
+
+    private void InitDefaultRecipes()
+    {
+        // 预填默认配方：绿草 + 红草 → 红绿草（Inspector 里也能改数值/加新配方）
+        if (recipes.Count == 0)
+        {
+            recipes.Add(new CombineRecipe
+            {
+                recipeName = "绿草 + 红草",
+                materialA_ID = "GreenHerb",
+                materialB_ID = "RedHerb",
+                resultID = "MixedHerb",
+                resultName = "红绿草",
+                resultHerbType = HerbType.Mixed,
+                resultHealAmount = 3,
+                resultDescription = "混合了两种草药的药剂，恢复效果更强。"
+            });
+        }
+    }
+
+    /// <summary> 返回当前背包材料足够的所有配方（合成面板只显示这些） </summary>
+    public List<CombineRecipe> GetAvailableRecipes()
+    {
+        List<CombineRecipe> available = new List<CombineRecipe>();
+        foreach (CombineRecipe r in recipes)
+        {
+            if (HasItem(r.materialA_ID) && HasItem(r.materialB_ID))
+                available.Add(r);
+        }
+        return available;
+    }
+
+    /// <summary> 背包里有没有指定 itemID 的物品 </summary>
+    public bool HasItem(string itemID)
+    {
+        if (string.IsNullOrEmpty(itemID)) return false;
+        foreach (InventoryItem it in items)
+        {
+            if (it.itemID == itemID) return true;
+        }
+        return false;
+    }
+
+    /// <summary> 执行合成：消耗材料，把产物放进背包。返回 true 表示合成成功 </summary>
+    public bool TryCombine(CombineRecipe recipe)
+    {
+        if (recipe == null) return false;
+
+        // 找两种材料在背包里的位置
+        int idxA = FindItemIndex(recipe.materialA_ID);
+        int idxB = FindItemIndex(recipe.materialB_ID);
+        if (idxA < 0 || idxB < 0) return false; // 材料不够
+
+        // 消耗材料（注意先删索引大的，避免删除后索引错位）
+        if (idxB > idxA)
+        {
+            RemoveItemAt(idxB);
+            RemoveItemAt(idxA);
+        }
+        else
+        {
+            RemoveItemAt(idxA);
+            RemoveItemAt(idxB);
+        }
+
+        // 生成产物放进背包
+        InventoryItem result = new InventoryItem
+        {
+            itemID = recipe.resultID,
+            itemName = recipe.resultName,
+            itemType = ItemType.Herb,   // 雏形阶段产物都是草药类
+            icon = recipe.resultIcon,
+            description = recipe.resultDescription,
+            herbType = recipe.resultHerbType,
+            healAmount = recipe.resultHealAmount
+        };
+        items.Add(result);
+
+        Debug.Log("[合成] " + recipe.recipeName + " → 获得 " + recipe.resultName + "！");
+        SaveState();
+        onChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary> 在背包里找指定 itemID 的索引，找不到返回 -1 </summary>
+    private int FindItemIndex(string itemID)
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].itemID == itemID) return i;
+        }
+        return -1;
     }
 }
