@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 8082649008616964064}
   - component: {fileID: 2327103057373685589}
   - component: {fileID: 1786143065981678241}
+  - component: {fileID: 1766760402679028488}
   m_Layer: 0
   m_Name: "\u9A6C\u5C14\u8482\u8FBE"
   m_TagString: Untagged
@@ -103,4 +104,26 @@ MonoBehaviour:
   icon: {fileID: -2039351566, guid: 55b0743ecc9d59d42957e26aa007e690, type: 3}
   description: 
   destroyOnPickup: 1
+  isKeyItem: 1
   gunData: {fileID: 11400000, guid: 1b05f6812f8191a4590dcad9357d34ba, type: 2}
+  ammoType: 1
+  ammoAmount: 10
+  herbType: 1
+  healAmount: 1
+--- !u!114 &1766760402679028488
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2329307214878156412}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 880ccb7573cab6e488dc05b50aed25d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  highlightRange: 2.5
+  pulseSpeed: 4
+  minAlpha: 0.25
+  maxAlpha: 1
+  highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
