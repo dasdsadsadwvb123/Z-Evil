@@ -42,9 +42,15 @@ public class InventoryUI : MonoBehaviour
     private string pendingMessage = null;         // 提示消息（使用/合成结果）
     private float messageUntil = 0f;              // 消息显示到什么时候
 
+    // ======== 健康指示（生化2式：颜色代替数字，仅背包可见） ========
+    private HealthSystem healthSystem;
+    private Image healthCircleImg;   // 圆形色块（按血量变色）
+    private Text healthStateText;    // 状态字（健康/注意/危险/濒死）
+
     private void Start()
     {
         inventory = GetComponent<Inventory>();
+        healthSystem = GetComponent<HealthSystem>();
     }
 
     private void Update()
@@ -399,6 +405,10 @@ public class InventoryUI : MonoBehaviour
         // 新增：合成面板（默认隐藏）
         CreateCombinePanel();
 
+        // 新增：健康指示（生化2式颜色状态，仅打开背包时可见）
+        CreateHealthUI();
+        RefreshHealthUI();
+
         selectedIndex = 0;
         RefreshSlots();
     }
@@ -503,6 +513,109 @@ public class InventoryUI : MonoBehaviour
         hintRect.sizeDelta = new Vector2(400, 30);
 
         combinePanel.SetActive(false);
+    }
+
+    // ======== 健康指示（生化2式：颜色状态代替数字，仅打开背包可见） ========
+
+    /// <summary> 创建健康指示 UI：圆形色块 + 状态文字（在物品信息下方） </summary>
+    private void CreateHealthUI()
+    {
+        // 色块 + 文字 的容器（屏幕左下角，像生化危机的状态指示）
+        // 注意：必须显式加 RectTransform（UI 坐标组件），否则拿不到 → 抛空引用
+        GameObject group = new GameObject("HealthState", typeof(RectTransform));
+        group.transform.SetParent(canvasObj.transform, false);
+        RectTransform groupRect = group.GetComponent<RectTransform>();
+        groupRect.anchorMin = new Vector2(0f, 0f); // 锚定左下角
+        groupRect.anchorMax = new Vector2(0f, 0f);
+        groupRect.pivot = new Vector2(0f, 0f);
+        groupRect.anchoredPosition = new Vector2(24f, 24f); // 离左下角 24 像素
+        groupRect.sizeDelta = new Vector2(400, 60);
+
+        // 圆形色块（代码生成圆形贴图，无需素材）
+        GameObject circle = new GameObject("Circle");
+        circle.transform.SetParent(group.transform, false);
+        healthCircleImg = circle.AddComponent<Image>();
+        healthCircleImg.sprite = CreateCircleSprite();
+        healthCircleImg.color = Color.white;
+        RectTransform circleRect = healthCircleImg.GetComponent<RectTransform>();
+        circleRect.anchorMin = new Vector2(0f, 0.5f);  // 容器左边缘、竖直居中
+        circleRect.anchorMax = new Vector2(0f, 0.5f);
+        circleRect.pivot = new Vector2(0.5f, 0.5f);
+        circleRect.anchoredPosition = new Vector2(30f, 0f);
+        circleRect.sizeDelta = new Vector2(46f, 46f);
+
+        // 状态文字
+        GameObject state = new GameObject("State");
+        state.transform.SetParent(group.transform, false);
+        healthStateText = state.AddComponent<Text>();
+        healthStateText.fontSize = 30;
+        healthStateText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        healthStateText.alignment = TextAnchor.MiddleLeft;
+        RectTransform stateRect = healthStateText.GetComponent<RectTransform>();
+        stateRect.anchorMin = new Vector2(0f, 0.5f);   // 圆形右侧
+        stateRect.anchorMax = new Vector2(0f, 0.5f);
+        stateRect.pivot = new Vector2(0f, 0.5f);
+        stateRect.anchoredPosition = new Vector2(62f, 0f);
+        stateRect.sizeDelta = new Vector2(280f, 50f);
+    }
+
+    /// <summary> 代码生成实心圆形贴图（圆形色块用） </summary>
+    private Sprite CreateCircleSprite()
+    {
+        int size = 128;
+        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float nx = x / (float)(size - 1) * 2f - 1f; // -1 ~ 1
+                float ny = y / (float)(size - 1) * 2f - 1f;
+                float dist = Mathf.Sqrt(nx * nx + ny * ny); // 到中心的距离（1=圆边）
+                // 边缘抗锯齿：0.9 内全白，0.9~1 渐变透明
+                float alpha = Mathf.Clamp01((1f - dist) / 0.1f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+            }
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+    }
+
+    /// <summary> 按当前血量百分比刷新健康色块颜色 + 状态文字 </summary>
+    private void RefreshHealthUI()
+    {
+        if (healthSystem == null || healthCircleImg == null) return;
+
+        float ratio = 0f;
+        if (healthSystem.maxHealth > 0)
+            ratio = (float)healthSystem.currentHealth / healthSystem.maxHealth;
+
+        Color c;
+        string state;
+
+        if (ratio >= 1f)
+        {
+            c = Color.green;                 state = "健康";     // 100%
+        }
+        else if (ratio >= 0.7f)
+        {
+            c = new Color(0.6f, 1f, 0.2f);   state = "注意";     // 70~99% 黄绿
+        }
+        else if (ratio >= 0.3f)
+        {
+            c = Color.yellow;                state = "危险";     // 30~69% 黄
+        }
+        else
+        {
+            c = new Color(1f, 0.1f, 0.05f);  state = "濒死";     // <30% 血红
+        }
+
+        healthCircleImg.color = c;
+        if (healthStateText != null)
+        {
+            healthStateText.text = state;
+            healthStateText.color = c;
+        }
     }
 
     private void RefreshSlots()

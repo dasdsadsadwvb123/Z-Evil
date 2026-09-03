@@ -31,6 +31,9 @@ public class Inventory : MonoBehaviour
 
     public System.Action onChanged;
 
+    /// <summary> 拾取/弹药/合成成功时广播（参数 = 要显示给玩家的提示文字，如"获得 绿草"） </summary>
+    public System.Action<string> OnItemNotice;
+
     private void Awake()
     {
         InitDefaultRecipes(); // 预填默认合成配方（绿草+红草=红绿草）
@@ -105,6 +108,7 @@ public class Inventory : MonoBehaviour
             equippedIndex = items.Count - 1;
         SaveState();
         onChanged?.Invoke();
+        OnItemNotice?.Invoke("获得 " + item.itemName); // 拾取提示
     }
 
     // ======== 备用弹药池（拾取弹药包后存入这里，换弹时转入弹夹） ========
@@ -137,6 +141,22 @@ public class Inventory : MonoBehaviour
         }
         Debug.Log("[弹药] " + type + " 备用弹药 → " + GetReserveAmmo(type));
         onChanged?.Invoke();
+
+        // 只有"增加弹药"（正数）才提示"获得"，扣除（换弹用负数）不提示
+        if (amount > 0)
+            OnItemNotice?.Invoke(GetAmmoTypeName(type) + "弹药 +" + amount);
+    }
+
+    /// <summary> 弹药类型 → 中文名（提示用） </summary>
+    private string GetAmmoTypeName(AmmoType type)
+    {
+        switch (type)
+        {
+            case AmmoType.Pistol:  return "手枪";
+            case AmmoType.Shotgun: return "霰弹";
+            case AmmoType.Eagle:   return "沙鹰";
+            default:               return "";
+        }
     }
 
     /// <summary> 能不能换弹？条件：装备了枪 + 弹夹没满 + 有备用弹药 </summary>
@@ -382,6 +402,7 @@ public class Inventory : MonoBehaviour
         Debug.Log("[合成] " + recipe.recipeName + " → 获得 " + recipe.resultName + "！");
         SaveState();
         onChanged?.Invoke();
+        OnItemNotice?.Invoke("合成成功：" + recipe.resultName);
         return true;
     }
 

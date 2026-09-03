@@ -1043,6 +1043,7 @@ GameObject:
   - component: {fileID: 780483486}
   - component: {fileID: 780483485}
   - component: {fileID: 780483501}
+  - component: {fileID: 780483502}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -1432,6 +1433,23 @@ MonoBehaviour:
   flashIntensity: 0.8
   fadeSpeed: 2.5
   flashColor: {r: 1, g: 0.15, b: 0.1, a: 1}
+--- !u!114 &780483502
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 780483484}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 192439b573740724588fe1623a755f3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  displayDuration: 2
+  fadeInTime: 0.15
+  fadeOutTime: 0.4
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  fontSize: 26
 --- !u!1 &852774991
 GameObject:
   m_ObjectHideFlags: 0

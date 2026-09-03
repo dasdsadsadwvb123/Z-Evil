@@ -2133,6 +2133,7 @@ GameObject:
   - component: {fileID: 890881208}
   - component: {fileID: 890881209}
   - component: {fileID: 890881210}
+  - component: {fileID: 890881211}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -2348,7 +2349,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5777cc622d326b14687a2d4c075b3571, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 3
+  maxHealth: 10
   currentHealth: 3
   invincibleDuration: 0.5
   deathTriggerName: Death
@@ -2525,6 +2526,29 @@ MonoBehaviour:
   flashIntensity: 0.8
   fadeSpeed: 2.5
   flashColor: {r: 1, g: 0.15, b: 0.1, a: 1}
+  enableLowHealthWarning: 1
+  lowHealthThreshold: 0.3
+  warningPulseSpeed: 4
+  warningMinAlpha: 0.15
+  warningMaxAlpha: 0.55
+  warningColor: {r: 1, g: 0.05, b: 0.02, a: 1}
+--- !u!114 &890881211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 890881193}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 192439b573740724588fe1623a755f3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  displayDuration: 2
+  fadeInTime: 0.15
+  fadeOutTime: 0.4
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  fontSize: 26
 --- !u!1001 &927380349
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5144,6 +5168,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1714417313177898036, guid: dc355b60f75cc2e43a11a7e3396fe59b, type: 3}
+      propertyPath: itemName
+      value: "\u7EA2\u8349"
+      objectReference: {fileID: 0}
     - target: {fileID: 1788840448011177222, guid: dc355b60f75cc2e43a11a7e3396fe59b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -3.607041
@@ -6528,6 +6556,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4080897146863295401, guid: f762a50fb88e1534ba586b7b22862770, type: 3}
       propertyPath: m_Name
+      value: "\u7EFF\u8349"
+      objectReference: {fileID: 0}
+    - target: {fileID: 4843038987006838078, guid: f762a50fb88e1534ba586b7b22862770, type: 3}
+      propertyPath: itemName
       value: "\u7EFF\u8349"
       objectReference: {fileID: 0}
     m_RemovedComponents: []

@@ -21,9 +21,28 @@ public class DamageFlash : MonoBehaviour
     [Tooltip("红框颜色（想换中毒绿色之类的就改这里）")]
     public Color flashColor = new Color(1f, 0.15f, 0.1f);
 
+    [Header("低血量警告（血量过低时边框持续呼吸闪烁）")]
+    [Tooltip("是否启用低血量边框警告")]
+    public bool enableLowHealthWarning = true;
+
+    [Tooltip("血量低于这个比例时触发警告（0.3 = 30%）")]
+    public float lowHealthThreshold = 0.3f;
+
+    [Tooltip("警告闪烁速度（越大闪得越快）")]
+    public float warningPulseSpeed = 4f;
+
+    [Tooltip("警告最暗时的透明度")]
+    public float warningMinAlpha = 0.15f;
+
+    [Tooltip("警告最亮时的透明度")]
+    public float warningMaxAlpha = 0.55f;
+
+    [Tooltip("警告颜色（默认血红色）")]
+    public Color warningColor = new Color(1f, 0.05f, 0.02f);
+
     private HealthSystem health;
     private Image flashImage;
-    private float currentAlpha = 0f; // 当前红色强度（受击时冲到峰值，然后慢慢归零）
+    private float currentAlpha = 0f; // 受击闪光的当前强度（受击时冲到峰值，然后慢慢归零）
 
     private void Start()
     {
@@ -54,14 +73,36 @@ public class DamageFlash : MonoBehaviour
     {
         if (flashImage == null) return;
 
+        // 1. 受击红闪：每帧衰减 → "闪一下然后淡出"
         if (currentAlpha > 0f)
-        {
-            // 红色每帧衰减 → 形成"闪一下然后淡出"的效果
             currentAlpha = Mathf.Max(0f, currentAlpha - fadeSpeed * Time.deltaTime);
 
-            Color c = flashColor;
-            c.a = currentAlpha;
+        // 2. 低血量警告：血量低于阈值时，边框持续"呼吸式"闪烁（明暗交替）
+        float warningAlpha = 0f;
+        if (enableLowHealthWarning && health != null && !health.isDead && health.maxHealth > 0)
+        {
+            float ratio = (float)health.currentHealth / health.maxHealth;
+            if (ratio < lowHealthThreshold)
+            {
+                // Mathf.Sin 产生 0~1~0 正弦波 → 透明度明暗呼吸
+                float wave = 0.5f + 0.5f * Mathf.Sin(Time.time * warningPulseSpeed);
+                warningAlpha = Mathf.Lerp(warningMinAlpha, warningMaxAlpha, wave);
+            }
+        }
+
+        // 3. 合并：取"受击闪"和"低血警告"中较强的那个显示
+        Color useColor = warningAlpha > currentAlpha ? warningColor : flashColor;
+        float finalAlpha = Mathf.Max(currentAlpha, warningAlpha);
+
+        if (finalAlpha > 0.005f)
+        {
+            Color c = useColor;
+            c.a = finalAlpha;
             flashImage.color = c;
+        }
+        else
+        {
+            flashImage.color = new Color(useColor.r, useColor.g, useColor.b, 0f);
         }
     }
 
