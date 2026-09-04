@@ -76,7 +76,13 @@ public class PixelGridMovement : MonoBehaviour
             return;
         }
 
-        if (frozen) return;
+        if (frozen)
+        {
+            // 冻结时（对话/剧情中）强制切回 idle 站立姿态，不再卡在跑动动画
+            isMoving = false;
+            TriggerIdleAnimation(facingDirection);
+            return;
+        }
 
         Vector2 rawInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
