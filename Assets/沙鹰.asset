@@ -10,19 +10,19 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a465b46b8054dae48be1c24c54e2ab85, type: 3}
-  m_Name: "\u6563\u5F39\u67AA"
+  m_Name: "\u6C99\u9E70"
   m_EditorClassIdentifier: 
-  gunName: "\u9730\u5F39\u67AA"
-  damage: 4
-  fireRate: 0.9
-  range: 5
-  icon: {fileID: 726561863, guid: 0934841bf3b22ff45ae42a5882bcfe9f, type: 3}
-  ammoType: 2
-  magSize: 5
+  gunName: "\u624B\u67AA"
+  damage: 100
+  fireRate: 1.2
+  range: 12
+  icon: {fileID: -2116018990, guid: 0934841bf3b22ff45ae42a5882bcfe9f, type: 3}
+  ammoType: 3
+  magSize: 7
   maxDurability: 0
-  pelletCount: 5
-  spreadAngle: 90
+  pelletCount: 1
+  spreadAngle: 0
   penetrate: 1
-  penetrateLimit: 1
-  penetrateDamageFalloff: 0.5
-  fireClip: {fileID: 8300000, guid: ecee494532c9c4b468a7017e9df5cf49, type: 3}
+  penetrateLimit: -1
+  penetrateDamageFalloff: 1
+  fireClip: {fileID: 8300000, guid: 36da6027600414d42a49b43c432b9d3f, type: 3}

@@ -172,44 +172,41 @@ public class Gun : MonoBehaviour
     }
 
     /// <summary>
-    /// 单发弹丸的命中判定（改造前 Fire 的射线 + 扇形兜底逻辑）。
-    /// 散弹枪的每一发都走一遍这个判定 → 近距离一群乌鸦能被一发打中好几个。
-    /// penetrate = true 时（散弹枪专属）：可打穿 1 个单位打到身后的目标，
-    /// 第 2 个目标伤害减半；穿透上限严格 1 次，第 3 个绝对打不到；墙会挡住穿透。
+    /// 单发弹丸的命中判定（射线 + 扇形兜底，穿透可配）。
+    /// 穿透规则（GunData 可调）：penetrate 总开关 + penetrateLimit（额外穿透数，-1 = 无限）
+    /// + penetrateDamageFalloff（每穿一个伤害乘一次，1 = 不衰减）。
+    /// 手枪（penetrate=false）= 永远只打 1 个目标，和最初版本行为一致。
     /// </summary>
     private void FireOnePellet(Vector2 origin, Vector2 dir, GunData gunData)
     {
         Debug.DrawRay(origin, dir * gunData.range, Color.red, 0.3f);
 
-        List<HealthSystem> targets = CollectTargetsAlongRay(origin, dir, gunData);
+        // 有效穿透上限：总开关没勾 = 0（只打第 1 个目标）；-1 = 无限
+        int limit = gunData.penetrate ? gunData.penetrateLimit : 0;
+        List<HealthSystem> targets = CollectTargetsAlongRay(origin, dir, gunData, limit);
         if (targets.Count == 0) return; // 谁都没打中，和原来一样
 
-        if (gunData.penetrate)
+        // 逐个结算：第 1 个全额伤害，之后每穿一个乘一次 falloff（向上取整、最低 1，防 0 伤）
+        for (int i = 0; i < targets.Count; i++)
         {
-            // 穿透：第 1 个全额，第 2 个 50%（向上取整、最低 1，保证减伤真实存在）
-            int piercedDamage = Mathf.Max(1, Mathf.CeilToInt(gunData.damage * 0.5f));
-            targets[0].TakeDamage(gunData.damage);
-            if (targets.Count > 1)
-            {
-                targets[1].TakeDamage(piercedDamage);
-                Debug.Log("[射击] 穿透命中: " + targets[1].name + "（减伤后伤害 " + piercedDamage + "）");
-            }
-        }
-        else
-        {
-            targets[0].TakeDamage(gunData.damage);
+            int dmg = Mathf.Max(1, Mathf.CeilToInt(gunData.damage * Mathf.Pow(gunData.penetrateDamageFalloff, i)));
+            targets[i].TakeDamage(dmg);
+            if (i > 0)
+                Debug.Log("[射击] 穿透命中: " + targets[i].name + "（第 " + (i + 1) + " 目标，伤害 " + dmg + "）");
         }
     }
 
     /// <summary>
-    /// 沿一条弹丸的射线收集目标（最多 2 个，按距离从近到远）：
-    /// 1. 先走射线精确路径（RaycastAll）：命中 HealthSystem 就收集；命中墙（没有血量的碰撞体）
-    ///    立即停止——穿透不能穿墙；死掉的敌人不挡弹不收集；
-    /// 2. 射线一个都没打中 → 走原版"扇形兜底"（点积 > 0.85 的扇形内最近目标），
-    ///    同样最多收 2 个且按距离排序——保证穿透目标也在扇形范围内，不会打到扇形外。
+    /// 沿一条弹丸的射线收集目标（按距离从近到远，数量上限由穿透配置决定）：
+    /// 1. 射线精确路径（RaycastAll）：命中活体 HealthSystem 就收集；命中墙（无血量碰撞体）
+    ///    立即截停——穿透不能穿墙；死人不挡弹不收集；无限穿透 = 一直收到射程尽头或撞墙为止；
+    /// 2. 射线一个都没打中 → 走"扇形兜底"（点积 > 0.85 的扇形内目标），同样按距离排序、
+    ///    受同一个上限约束——穿透目标必然也在扇形范围内。
     /// </summary>
-    private List<HealthSystem> CollectTargetsAlongRay(Vector2 origin, Vector2 dir, GunData gunData)
+    private List<HealthSystem> CollectTargetsAlongRay(Vector2 origin, Vector2 dir, GunData gunData, int limit)
     {
+        // 要收集的目标总数上限：limit 是"额外穿透数"，+1 才是含第一个目标的总数；-1（无限）用 int.MaxValue
+        int maxTargets = limit < 0 ? int.MaxValue : limit + 1;
         List<HealthSystem> result = new List<HealthSystem>();
 
         // 1. 射线路径（墙挡穿透）
@@ -223,7 +220,7 @@ public class Gun : MonoBehaviour
                 if (!hs.isDead)
                 {
                     result.Add(hs);
-                    if (result.Count >= 2) return result; // 穿透上限：最多 2 个
+                    if (result.Count >= maxTargets) return result; // 穿透上限（无限时永远到不了）
                 }
                 // 死人：不挡弹不收集，弹丸继续飞
             }
@@ -234,7 +231,7 @@ public class Gun : MonoBehaviour
         }
         if (result.Count > 0) return result;
 
-        // 2. 兜底：扇形内最近目标（规则和改造前的兜底完全一致，只是收最多 2 个）
+        // 2. 兜底：扇形内目标按距离排序（规则和最初版兜底一致，数量受同一个上限约束）
         List<HealthSystem> fan = new List<HealthSystem>();
         foreach (HealthSystem hs in FindObjectsOfType<HealthSystem>())
         {
@@ -248,7 +245,7 @@ public class Gun : MonoBehaviour
         fan.Sort((a, b) =>
             ((Vector2)a.transform.position - origin).sqrMagnitude
             .CompareTo(((Vector2)b.transform.position - origin).sqrMagnitude));
-        for (int i = 0; i < fan.Count && result.Count < 2; i++)
+        for (int i = 0; i < fan.Count && result.Count < maxTargets; i++)
             result.Add(fan[i]);
         return result;
     }

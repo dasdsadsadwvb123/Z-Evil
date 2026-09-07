@@ -28,8 +28,14 @@ public class GunData : ScriptableObject
     [Tooltip("散射总角度（度）：多发弹丸均匀铺在这个扇形里。0 = 全部打正中一点")]
     public float spreadAngle = 0f;
 
-    [Tooltip("穿透：可打穿 1 个单位打到身后的目标，穿透伤害减半（只有散弹枪勾，手枪/沙鹰别勾）")]
+    [Tooltip("穿透总开关：勾上才允许穿透（具体穿几个看 penetrateLimit；手枪/沙鹰不勾 = 单发直射）")]
     public bool penetrate = false;
+
+    [Tooltip("穿透上限：额外打穿几个目标。0 = 不穿透；1 = 穿 1 个（散弹现状）；-1 = 无限穿透（沙鹰用）。只在 penetrate 勾选时生效")]
+    public int penetrateLimit = 1;
+
+    [Tooltip("穿透伤害衰减：每穿一个目标伤害乘一次（1 = 不衰减，沙鹰用；0.5 = 每穿一个减半）。第 1 个目标永远吃全额")]
+    public float penetrateDamageFalloff = 1f;
 
     [Header("音效")]
     [Tooltip("开火音效（每把枪拖各自的；不拖 = 静音开枪，不会报错。近战小刀不会播音效）")]

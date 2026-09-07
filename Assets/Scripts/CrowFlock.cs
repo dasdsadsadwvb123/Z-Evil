@@ -26,12 +26,45 @@ public class CrowFlock : MonoBehaviour
     [Tooltip("大于 0 时：玩家进入这个距离才孵化（进房惊鸟效果）。0 = 不启用")]
     public float wakeDistance = 0f;
 
+    [Header("鸦群音效（孵化时开始循环，全灭自动停止）")]
+    [Tooltip("鸦群循环音（叫声+扇翅，小泽自己拖音频文件）；不拖 = 全程静音不报错")]
+    public AudioClip flockLoopClip;
+    [Tooltip("循环音音量")]
+    [Range(0f, 1f)]
+    public float volume = 0.7f;
+
     private bool spawned = false;
+    private AudioSource audioSource;   // 循环音音源（自动补在本物体上）
+    private int aliveCount = 0;        // 存活乌鸦计数，归零 → 停止循环音
 
     private void Start()
     {
+        EnsureAudioSource();
         if (spawnOnStart && wakeDistance <= 0f)
             Spawn();
+    }
+
+    /// <summary> 确保本物体上有 AudioSource（loop 循环、不开机自播） </summary>
+    private void EnsureAudioSource()
+    {
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.playOnAwake = false;
+        audioSource.loop = true;
+        audioSource.clip = flockLoopClip;
+        audioSource.volume = volume;
+    }
+
+    /// <summary> CrowAI 死亡时回调：存活数减一，归零 → 停止循环音（惊群≠死亡，不会误停） </summary>
+    public void NotifyCrowDied()
+    {
+        aliveCount = Mathf.Max(0, aliveCount - 1);
+        if (aliveCount == 0 && audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+            Debug.Log("[乌鸦群] 全灭，循环音停止", gameObject);
+        }
     }
 
     private void Update()
@@ -63,8 +96,15 @@ public class CrowFlock : MonoBehaviour
             // 圆内随机点（至少离中心 0.5 格，防止全叠在一个点上）
             Vector2 offset = Random.insideUnitCircle * spawnRadius;
             if (offset.magnitude < 0.5f) offset = offset.normalized * 0.5f;
-            Instantiate(crowPrefab, (Vector2)transform.position + offset, Quaternion.identity);
+            CrowAI crow = Instantiate(crowPrefab, (Vector2)transform.position + offset, Quaternion.identity);
+            crow.ownerFlock = this; // 死亡时回调通知，做全灭计数
         }
+        aliveCount = flockSize;
+
+        // 孵化 = 鸦群被惊起：开始循环音（clip 没拖就静音跳过）
+        if (flockLoopClip != null && audioSource != null)
+            audioSource.Play();
+
         Debug.Log("[乌鸦群] 已孵化 " + flockSize + " 只乌鸦", gameObject);
     }
 

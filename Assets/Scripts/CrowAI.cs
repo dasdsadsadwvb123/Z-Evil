@@ -62,6 +62,12 @@ public class CrowAI : MonoBehaviour
     public Sprite deathSprite;
     [Tooltip("尸体停留秒数（0 = 永久不消失）")]
     public float corpseDuration = 2f;
+    [Tooltip("死亡哀叫：死亡瞬间短促叫一声（不拖 = 静音，不影响其他）")]
+    public AudioClip deathCryClip;
+
+    [HideInInspector]
+    [Tooltip("生成我的鸟群（CrowFlock 自动填，全灭计数用；手动摆的乌鸦留空即可）")]
+    public CrowFlock ownerFlock;
 
     [Header("占位动画（小泽接真翅膀动画后取消勾选）")]
     [Tooltip("用 翻转朝向 + Y缩放正弦 模拟扇翅")]
@@ -261,6 +267,14 @@ public class CrowAI : MonoBehaviour
         dead = true;
         rb.velocity = Vector2.zero;
         DisturbFlock(); // 枪响/击杀 = 惊群信号
+
+        // 死亡哀叫：PlayClipAtPoint 生成临时音源，尸体销毁也不会打断这声短叫
+        if (deathCryClip != null)
+            AudioSource.PlayClipAtPoint(deathCryClip, transform.position);
+
+        // 通知鸟群：我死了（flock 用它做"全灭停止循环音"的存活计数）
+        if (ownerFlock != null)
+            ownerFlock.NotifyCrowDied();
 
         // 小概率掉弹药（克隆 Prefab，参考密码机钥匙套路）
         if (dropPickupPrefab != null && Random.value <= dropChance)

@@ -49,3 +49,5 @@ MonoBehaviour:
   spawnRadius: 3
   spawnOnStart: 1
   wakeDistance: 8
+  flockLoopClip: {fileID: 8300000, guid: ec11ea980adcdd24f9b768189e906c34, type: 3}
+  volume: 0.7
