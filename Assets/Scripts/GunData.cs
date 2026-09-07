@@ -20,4 +20,18 @@ public class GunData : ScriptableObject
 
     [Tooltip("近战武器的耐久上限；设为 0 表示无限耐久（远程枪不用管这个）")]
     public int maxDurability = 0;
+
+    [Header("散射设置（散弹枪用；手枪/沙鹰保持默认 = 单发直射，行为和以前完全一样）")]
+    [Tooltip("一次开火打出几发弹丸（1 = 单发直射，手枪/沙鹰不用动）")]
+    public int pelletCount = 1;
+
+    [Tooltip("散射总角度（度）：多发弹丸均匀铺在这个扇形里。0 = 全部打正中一点")]
+    public float spreadAngle = 0f;
+
+    [Tooltip("穿透：可打穿 1 个单位打到身后的目标，穿透伤害减半（只有散弹枪勾，手枪/沙鹰别勾）")]
+    public bool penetrate = false;
+
+    [Header("音效")]
+    [Tooltip("开火音效（每把枪拖各自的；不拖 = 静音开枪，不会报错。近战小刀不会播音效）")]
+    public AudioClip fireClip;
 }

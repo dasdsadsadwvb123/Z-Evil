@@ -3586,6 +3586,7 @@ MonoBehaviour:
   allGunDatas:
   - {fileID: 11400000, guid: 1b05f6812f8191a4590dcad9357d34ba, type: 2}
   - {fileID: 11400000, guid: df9d025c7c472bf469d805f4ba97604c, type: 2}
+  - {fileID: 11400000, guid: 8bdcf502572992842b16d0501dd37dc0, type: 2}
   itemTemplates:
   - itemID: pistol
     icon: {fileID: -2039351566, guid: 55b0743ecc9d59d42957e26aa007e690, type: 3}
@@ -3888,13 +3889,13 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 1256518603}
   - {fileID: 619394802}
+  - {fileID: 2073355072}
   - {fileID: 1763057736}
   - {fileID: 1166120544}
   - {fileID: 1444258897}
   - {fileID: 1602395337}
   - {fileID: 1836574661}
   - {fileID: 1568611501}
-  - {fileID: 2073355072}
   - {fileID: 1364338607}
   - {fileID: 26563427}
   - {fileID: 1017037409}

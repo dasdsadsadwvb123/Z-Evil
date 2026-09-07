@@ -895,7 +895,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &403476296
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2468,6 +2468,7 @@ MonoBehaviour:
   allGunDatas:
   - {fileID: 11400000, guid: 1b05f6812f8191a4590dcad9357d34ba, type: 2}
   - {fileID: 11400000, guid: df9d025c7c472bf469d805f4ba97604c, type: 2}
+  - {fileID: 11400000, guid: 8bdcf502572992842b16d0501dd37dc0, type: 2}
   itemTemplates:
   - itemID: pistol
     icon: {fileID: -2039351566, guid: 55b0743ecc9d59d42957e26aa007e690, type: 3}
@@ -5782,7 +5783,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1720192491
 RectTransform:
   m_ObjectHideFlags: 0
