@@ -17,5 +17,13 @@ MonoBehaviour:
   fireRate: 0.5
   range: 0.5
   icon: {fileID: 0}
-  maxAmmo: 15
+  ammoType: 1
+  magSize: 15
   maxDurability: 30
+  pelletCount: 1
+  spreadAngle: 0
+  penetrate: 0
+  penetrateLimit: 1
+  penetrateDamageFalloff: 1
+  fireClip: {fileID: 0}
+  dryFireClip: {fileID: 0}

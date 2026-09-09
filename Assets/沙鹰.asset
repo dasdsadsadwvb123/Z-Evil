@@ -26,3 +26,4 @@ MonoBehaviour:
   penetrateLimit: -1
   penetrateDamageFalloff: 1
   fireClip: {fileID: 8300000, guid: 36da6027600414d42a49b43c432b9d3f, type: 3}
+  dryFireClip: {fileID: 8300000, guid: 5fb2335a797cbca49bc5f537e617bedb, type: 3}

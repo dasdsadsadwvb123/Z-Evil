@@ -40,4 +40,6 @@ public class GunData : ScriptableObject
     [Header("音效")]
     [Tooltip("开火音效（每把枪拖各自的；不拖 = 静音开枪，不会报错。近战小刀不会播音效）")]
     public AudioClip fireClip;
+    [Tooltip("打空音效（弹夹+备用弹全空时按 J 的'咔嗒'声；每把枪拖各自的，不拖 = 静音不报错）")]
+    public AudioClip dryFireClip;
 }

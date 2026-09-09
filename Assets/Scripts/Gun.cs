@@ -22,7 +22,7 @@ public class Gun : MonoBehaviour
     private float lastFireTime;
     private AudioSource audioSource;   // 开火音效用（没有就自动补一个）
 
-    /// <summary> 开火瞬间广播（每次扣扳机一次；近战小刀不触发）。GunVisual 订阅它做枪口闪光 </summary>
+    /// <summary> 开火/挥刀瞬间广播（每次扣扳机一次；远程和近战都触发）。GunVisual 订阅它做亮枪/亮刀 </summary>
     public event System.Action OnFired;
 
     /// <summary> 当前是否在换弹中（换弹期间禁止开枪，防止触发开枪动画） </summary>
@@ -61,7 +61,7 @@ public class Gun : MonoBehaviour
             if (gunData.range > 1f && !inventory.ConsumeAmmo())
             {
                 // 弹药为 0：空仓咔嗒，禁止开枪
-                DryFire();
+                DryFire(gunData);
                 return;
             }
 
@@ -79,9 +79,14 @@ public class Gun : MonoBehaviour
         }
     }
 
-    /// <summary> 弹尽时触发：空仓提示（以后可以在这里播放"咔嗒"音效） </summary>
-    private void DryFire()
+    /// <summary>
+    /// 弹尽时触发：空仓提示 + 打空"咔嗒"音效（dryFireClip 没配就只有日志，静音不报错）。
+    /// 正常音量播：空仓是玩家贴脸按键的行为，玩家侧枪声一贯全音量（距离缩放是 Boss 电锯哥那边的机制）。
+    /// </summary>
+    private void DryFire(GunData gunData)
     {
+        if (gunData.dryFireClip != null && audioSource != null)
+            audioSource.PlayOneShot(gunData.dryFireClip); // 每把枪各自的"咔嗒"（GunData 里拖素材）
         Debug.Log("[弹药] 咔嗒…… 没子弹了！");
     }
 
@@ -123,6 +128,7 @@ public class Gun : MonoBehaviour
         if (gunData.range <= 1f)
         {
             MeleeAttack();
+            OnFired?.Invoke(); // 广播"挥刀了"（GunVisual 亮刀用；近战不亮枪口闪光，由 GunVisual 按 range 区分）
             return;
         }
 
