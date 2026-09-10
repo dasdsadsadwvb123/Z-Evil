@@ -7,9 +7,11 @@ using System.Collections.Generic;
 /// 失明 → 听声辨位（玩家【移动中】才算发出声音，站定不动就"隐身"）
 /// → 发现 → 尖叫 → 地面追击（带记忆时间：发现后追 N 秒，期间玩家站定也追）→ 舌头长距突刺攻击。
 /// 追出守卫半径 / 记忆时间到 → 放弃 → 走回出生点继续地面巡逻。
-/// 死亡：普通敌人待遇——HealthSystem 勾 destroyOnDeath 自动销毁（本脚本不做死亡演出）。
+/// 死亡：趴伏定格（换 deathSprite + 压扁下沉 + 短抽搐，爬行动物瘫软感）；
+/// Animator 里有 "death" 状态则优先播真动画（向前兼容，以后画了死亡动画无缝升级）；
+/// corpseFadeDuration 默认 0 = 尸体永久躺地上，填 >0 = 渐隐后销毁。
 /// 挂到舔食者物体上（需要：SpriteRenderer + BoxCollider2D(Trigger) + Rigidbody2D(Kinematic)
-/// + HealthSystem(maxHealth=8, destroyOnDeath 勾上) + 小泽的 Animator + 本脚本）。
+/// + HealthSystem(maxHealth=8，死亡生命周期由本脚本接管) + 小泽的 Animator + 本脚本）。
 /// 动画：电锯哥同款 12 个小写状态名（idle/walk/attack × 上下左右），缺失只警告不崩。
 /// 玩家移动检测用"逐帧位移"判断，不需要改小泽的 PixelGridMovement（isMoving 是私有的）。
 /// </summary>
@@ -72,6 +74,14 @@ public class LickerAI : MonoBehaviour
     [Range(0f, 1f)]
     public float loopVolume = 0.6f;
 
+    [Header("死亡（血量归零：趴伏定格，不做大演出）")]
+    [Tooltip("死亡图（趴伏姿态；不拖 = 保持原图，只做压扁趴伏）")]
+    public Sprite deathSprite;
+    [Tooltip("尸体渐隐时长（秒）：默认 0 = 尸体永久躺在地上；填 >0 = 渐隐这么久后消失")]
+    public float corpseFadeDuration = 0f;
+    [Tooltip("死亡哀叫（可选；不拖 = 静音）")]
+    public AudioClip deathCryClip;
+
     // ---- 运行时状态 ----
     private Rigidbody2D rb;
     private SpriteRenderer sr;
@@ -129,9 +139,10 @@ public class LickerAI : MonoBehaviour
         myHealth = GetComponent<HealthSystem>();
         if (myHealth != null)
         {
-            myHealth.deathTriggerName = "";  // 普通敌人没有死亡动画状态，死了直接靠 destroyOnDeath 销毁
-            myHealth.destroyOnDeath = true;  // 血量归零 → HealthSystem 自己 Destroy（可挂掉落用 OnDeath 事件）
-            myHealth.OnDamaged += OnHurt;    // 受击闪白
+            myHealth.deathTriggerName = "";   // 不走 HealthSystem 的死亡触发，死亡表现由本脚本接管
+            myHealth.destroyOnDeath = false;  // 同乌鸦/电锯哥：死亡生命周期由本脚本管（趴伏→可选渐隐→销毁）
+            myHealth.OnDamaged += OnHurt;     // 受击闪白
+            myHealth.OnDeath += OnDied;       // 死亡：换图趴伏/真动画 + 收尸
         }
         else
         {
@@ -161,6 +172,7 @@ public class LickerAI : MonoBehaviour
         if (myHealth != null)
         {
             myHealth.OnDamaged -= OnHurt;
+            myHealth.OnDeath -= OnDied;
         }
     }
 
@@ -507,6 +519,107 @@ public class LickerAI : MonoBehaviour
         yield return new WaitForSeconds(0.1f);
         sr.color = baseColor;
         flashRoutine = null;
+    }
+
+    // ======== 死亡（趴伏定格 / 真动画兼容） ========
+
+    /// <summary>
+    /// 死亡入口（HealthSystem.OnDeath 触发，此刻 isDead 已 = true，AI/受击守卫全部冻结）：
+    /// 掐掉在途协程（突刺/闪白）防诈尸 → 环境声熄火 → 尸体不挡弹不挡路、排序垫底 →
+    /// 哀叫一声（可选）→ 走死亡表现协程。
+    /// </summary>
+    private void OnDied()
+    {
+        StopAllCoroutines(); // 在途的舌头突刺/闪白全部掐掉，死了不会打完手里这套
+
+        if (audioSource != null) audioSource.Stop(); // 涎液循环声熄火
+
+        Collider2D col = GetComponent<Collider2D>();
+        if (col != null) col.enabled = false; // 尸体不挡弹不挡路
+
+        if (sr != null) sr.sortingOrder -= 5; // 压低排序：尸体垫在活物脚下
+
+        if (deathCryClip != null)
+            AudioSource.PlayClipAtPoint(deathCryClip, transform.position); // 临时音源，销毁尸体也会把哀叫播完
+
+        StartCoroutine(DeathRoutine());
+    }
+
+    /// <summary>
+    /// 死亡表现：
+    /// 有 "death" 动画状态 → 优先 CrossFade 播真动画（不 loop 播完定格最后帧），跳过换图+压扁；
+    /// 没有 → 换 deathSprite + 趴伏三连：0.25 秒压扁(scaleY×0.7)+下沉 → ±3° 抽搐 0.3 秒 → 定格瘫软。
+    /// 收尾：corpseFadeDuration 默认 0 = 尸体永久躺地上；填 >0 = 渐隐这么久后 Destroy。
+    /// </summary>
+    private IEnumerator DeathRoutine()
+    {
+        // ---- 0. 检查有没有真死亡动画（向前兼容：有就播真动画） ----
+        bool hasDeathAnim = false;
+        if (animator != null)
+        {
+            int deathHash = Animator.StringToHash("death");
+            hasDeathAnim = animator.HasState(0, deathHash);
+            if (hasDeathAnim)
+            {
+                animator.CrossFade(deathHash, 0.05f, 0, 0f); // PlayState 没有 dead 守卫，死亡动画这里直接播
+                // 最多等 5 秒：真动画不 loop 播完会停在最后帧；万一小泽勾了 Loop，超时照样接收尾，不会卡死
+                float wait = 0f;
+                while (wait < 5f)
+                {
+                    wait += Time.deltaTime;
+                    AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(0);
+                    if (info.IsName("death") && info.normalizedTime >= 1f) break;
+                    yield return null;
+                }
+            }
+        }
+
+        // ---- 1. 没真动画才走换图 + 趴伏表现 ----
+        if (!hasDeathAnim)
+        {
+            // ⚠️ 先关 Animator：不关的话它还在循环 walk 状态，每帧把 SpriteRenderer 的 sprite
+            // 改写回动画帧，死亡图会被盖掉 = "死了还在跑"（电锯哥早期同款坑）。
+            // 关掉 = 定格当前帧；下面趴伏的压扁/下沉作用在 transform 上，不受 Animator 影响。
+            if (animator != null) animator.enabled = false;
+
+            if (sr != null && deathSprite != null) sr.sprite = deathSprite; // 不拖死亡图就保持原图，只做压扁
+
+            // 趴伏：0.25 秒内压扁（scaleY ×0.7）+ 身体下沉一点（贴地瘫软感，不是硬转 90°）
+            Vector3 baseScale = sr.transform.localScale;
+            Vector2 basePos = rb.position;
+            float t = 0f;
+            while (t < 0.25f)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / 0.25f);
+                sr.transform.localScale = new Vector3(baseScale.x, Mathf.Lerp(baseScale.y, baseScale.y * 0.7f, k), 1f);
+                rb.position = Vector2.Lerp(basePos, basePos + Vector2.down * 0.15f, k); // 下沉少许，趴得更低
+                yield return null;
+            }
+
+            // ±3° 小抽搐 0.3 秒（神经反射渐停），然后定格
+            t = 0f;
+            while (t < 0.3f)
+            {
+                t += Time.deltaTime;
+                sr.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-3f, 3f));
+                yield return null;
+            }
+            sr.transform.localRotation = Quaternion.identity; // 定格：彻底瘫软
+        }
+
+        // ---- 2. 收尾：默认 0 = 尸体永久躺地；调试/需要清场时把 Corpse Fade Duration 填 >0 开渐隐 ----
+        if (corpseFadeDuration <= 0f) yield break; // 永久尸体
+        float ft = 0f;
+        Color c = sr.color;
+        while (ft < corpseFadeDuration)
+        {
+            ft += Time.deltaTime;
+            c.a = Mathf.Clamp01(1f - ft / corpseFadeDuration);
+            sr.color = c;
+            yield return null;
+        }
+        Destroy(gameObject);
     }
 
     // ======== 动画（按状态名播放，缺失只警告不崩） ========

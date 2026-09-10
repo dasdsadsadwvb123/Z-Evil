@@ -13,6 +13,9 @@ public class PixelGridMovement : MonoBehaviour
     [Tooltip("移动速度（世界单位/秒）")]
     [SerializeField] private float moveSpeed = 5f;
 
+    private float speedMultiplier = 1f;  // 速度倍率（1=正常，0.5=推箱减速；纯运行时，不序列化）
+    private float slowTimer = 0f;        // 减速剩余秒数（>0 = 减速中，归零自动恢复）
+
     [Tooltip("输入缓冲时间（秒），移动过程中提前按下方向键的有效保持时间")]
     [SerializeField] private float inputBufferDuration = 0.15f;
 
@@ -69,6 +72,13 @@ public class PixelGridMovement : MonoBehaviour
 
     void Update()
     {
+        // 减速倒计时（放 Update 不放 FixedUpdate：frozen 早退也不影响恢复）
+        if (slowTimer > 0f)
+        {
+            slowTimer -= Time.deltaTime;
+            if (slowTimer <= 0f) speedMultiplier = 1f;
+        }
+
         // 在移动处理前锁定，防止射击/挥刀时先行一步
         if (!frozen && Input.GetKeyDown(KeyCode.J))
         {
@@ -115,7 +125,7 @@ public class PixelGridMovement : MonoBehaviour
         if (frozen || !isMoving) return;
 
         Vector2 currentPos = rb.position;
-        Vector2 newPos = Vector2.MoveTowards(currentPos, targetGridPosition, moveSpeed * Time.fixedDeltaTime);
+        Vector2 newPos = Vector2.MoveTowards(currentPos, targetGridPosition, moveSpeed * speedMultiplier * Time.fixedDeltaTime);
         rb.MovePosition(newPos);
 
         if (Vector2.Distance(rb.position, targetGridPosition) < 0.001f)
@@ -318,6 +328,13 @@ public class PixelGridMovement : MonoBehaviour
         LockMovement();
         ResetAllTriggers();
         animator.SetTrigger("Slash");
+    }
+
+    /// <summary> 外部系统（推箱子）调用：让玩家临时减速。重复调用会刷新计时（推一箱刷一次 = 连续推持续减速） </summary>
+    public void ApplySlow(float duration, float multiplier = 0.5f)
+    {
+        speedMultiplier = multiplier;
+        slowTimer = duration;
     }
 
     // ======== 攻击锁定 ========
