@@ -42,6 +42,9 @@ public class InventoryUI : MonoBehaviour
     private string pendingMessage = null;         // 提示消息（使用/合成结果）
     private float messageUntil = 0f;              // 消息显示到什么时候
 
+    /// <summary> 界面在哪一帧被打开：外部 OpenExternal 弹出当帧，Tab 不作关闭指令（防同帧自关，柜子同款守卫） </summary>
+    private int openedFrame = -1;
+
     // ======== 健康指示（生化2式：颜色代替数字，仅背包可见） ========
     private HealthSystem healthSystem;
     private Image healthCircleImg;   // 圆形色块（按血量变色）
@@ -55,7 +58,8 @@ public class InventoryUI : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(toggleKey))
+        // Tab 开关背包：外部弹出（OpenExternal）当帧的 Tab 不作关闭指令——防"同帧自关"（柜子 openedFrame 同款守卫）
+        if (Input.GetKeyDown(toggleKey) && Time.frameCount != openedFrame)
         {
             if (isOpen) Close();
             else Open();
@@ -102,6 +106,18 @@ public class InventoryUI : MonoBehaviour
         {
             if (selectedIndex < total - 1) selectedIndex++;
             UpdateSelection();
+        }
+
+        // E：使用宝石（靠近宝石铁门时镶嵌；镶嵌成功 toast 由 GemDoor 发，失败在这里提示）
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            InventoryItem gem = inventory.GetItemAt(selectedIndex);
+            if (gem != null && GemDoor.IsGemItem(gem.itemID))
+            {
+                bool ok = GemDoor.TryEmbed(gem.itemID);
+                if (ok) RefreshSlots();                    // 宝石已从背包移除，刷新格子
+                else ShowInfoMessage("要靠近铁门才能镶嵌"); // 不在门边/已镶过 → 提示且宝石保留
+            }
         }
 
         // 空格：按物品类型处理
@@ -321,6 +337,14 @@ public class InventoryUI : MonoBehaviour
         CreateUI();
     }
 
+    /// <summary> 外部打开背包（宝石铁门按 F 弹出用）：复用 Open 的暂停/建界面逻辑，已开着就不动 </summary>
+    public void OpenExternal()
+    {
+        openedFrame = Time.frameCount; // 记下弹出帧：这一帧的 Tab 不算关闭指令（同一次按键不能既开又关）
+        Debug.Log("[宝石门诊断] OpenExternal 被调用，弹出帧=" + openedFrame + "，isOpen(调用前)=" + isOpen); // ⚠️ 排查用临时日志
+        Open();
+    }
+
     private void Close()
     {
         isOpen = false;
@@ -372,7 +396,7 @@ public class InventoryUI : MonoBehaviour
         GameObject tip = new GameObject("Tip");
         tip.transform.SetParent(canvasObj.transform, false);
         Text tipText = tip.AddComponent<Text>();
-        tipText.text = "WASD 选择 | 空格 使用/合成 | Tab 关闭";
+        tipText.text = "WASD 选择 | 空格 使用/合成 | E 使用宝石 | Tab 关闭";
         tipText.fontSize = 20;
         tipText.color = Color.white;
         tipText.alignment = TextAnchor.MiddleCenter;

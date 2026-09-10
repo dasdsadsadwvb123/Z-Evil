@@ -4,10 +4,10 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 箱子系统（一个脚本两种类型，Inspector 下拉区分）：
-/// - Cabinet（衣柜式）：无血量不会坏，靠近按 F 打开取物界面，点击箱内物品取出到背包。
+/// - Cabinet（衣柜式）：无血量不会坏，靠近按 F 打开取物界面，点击箱内物品取出到背包。= 安全储物柜。
 /// - Breakable（可破坏式）：挂 HealthSystem（没有自动补）——刀/枪/舔食者都能打，血量归零破裂：
-///   换破损贴图 + 破裂音效 + 内容物全部掉在地上变拾取物（参考密码机钥匙/乌鸦掉落套路）；
-///   破裂前也能按 F 打开取物；破裂后不能再打开（碎了就是一地东西 + 废墟贴图）。
+///   换破损贴图 + 破裂音效 + 内容物全部掉在地上变拾取物（参考密码机钥匙/乌鸦掉落套路），
+///   碰撞体禁用（废墟可穿行）。没有 F 开盖交互——里面的东西只能打碎后捡。= 只能砸的杂物箱。
 ///
 /// ⚠️ 语义："往箱子里塞东西"是开发者行为——在 Inspector 的 Starter Items 里预填；
 /// 玩家只能取出（柜子里点走 / 打碎捡走），没有"放入"功能。
@@ -63,6 +63,16 @@ public class Container : MonoBehaviour
     [Tooltip("玩家离箱子多近能按 F 打开")]
     public float interactRange = 1.5f;
 
+    [Header("密码锁（勾选后按 F 不开柜，先弹密码面板；输对一次永记——读档重置）")]
+    [Tooltip("需要密码：勾上后按 F 弹出数字密码面板（0-9 任意位），输对才打开柜子")]
+    public bool requirePassword = false;
+    [Tooltip("正确密码（如 1962）：数字键输入，位数不限，支持前导零")]
+    public string password = "";
+    [Tooltip("输错音效（可选；不拖 = 只有红闪没声）")]
+    public AudioClip wrongClip;
+    [Tooltip("密码输入正确的音效（可选）")]
+    public AudioClip successClip;
+
     [Header("音效（不拖 = 静音；走距离听声惯例）")]
     public AudioClip openClip;
     public AudioClip takeClip;   // 取出物品的声音
@@ -77,11 +87,14 @@ public class Container : MonoBehaviour
 
     public bool IsBroken { get; private set; } = false;
 
+    /// <summary> 密码是否已解开（运行时标记：解开本次游戏内永记，读档重置） </summary>
+    private bool unlocked = false;
+
     private SpriteRenderer sr;
     private Transform player;
     private HealthSystem myHealth;
     private GameObject promptUI;
-    private Text promptTextUI;
+    private Text promptTextUI;         // 提示文字引用（密码锁动态切"输入密码/打开"文案）
 
     private void Start()
     {
@@ -104,7 +117,7 @@ public class Container : MonoBehaviour
         else Debug.LogWarning("[箱子] 场景里没有 Player 标签的物体，没人能打开我", gameObject);
 
         if (type == ContainerType.Breakable) SetupBreakable();
-        CreatePromptUI();
+        else CreatePromptUI(); // 只有 Cabinet（衣柜式）需要"按F打开"提示；Breakable 没有开盖交互
     }
 
     /// <summary> 把 Inspector 条目转成运行时物品条目（枪会自动满弹满耐久，和拾取规则一致） </summary>
@@ -154,16 +167,59 @@ public class Container : MonoBehaviour
     private void Update()
     {
         if (IsBroken || player == null) return;
-        if (ContainerUI.IsOpen) { if (promptUI != null) promptUI.SetActive(false); return; } // 界面开着时不重复响应 F（防"关闭同帧被重开"）
+
+        // 可破坏式：没有 F 开盖交互（设计定稿：Breakable = 只能砸的杂物箱，里面的东西打碎后捡）。
+        // 靠近不显示提示、按 F 无反应——只有 Cabinet（衣柜式）能开。
+        if (type == ContainerType.Breakable) return;
+
+        // 界面开着不响应；【关闭当帧】的 F 也无视（ContainerUI 同帧已 Close，再读 F 会立刻重开 = "只能开一次"的根因）
+        if (ContainerUI.IsOpen || Time.frameCount == ContainerUI.LastClosedFrame)
+        {
+            if (promptUI != null) promptUI.SetActive(false);
+            return;
+        }
 
         bool near = Vector2.Distance(transform.position, player.position) <= interactRange;
-        if (promptUI != null) promptUI.SetActive(near);
+        if (promptUI != null)
+        {
+            promptUI.SetActive(near);
+            // 提示文案动态切换：密码没解开 = "输入密码"；解开/普通柜 = "打开"
+            if (promptTextUI != null)
+                promptTextUI.text = (requirePassword && !unlocked)
+                    ? "按F输入密码"
+                    : (type == ContainerType.Cabinet ? "按F打开柜子" : "按F打开箱子");
+        }
 
         if (near && Input.GetKeyDown(KeyCode.F))
         {
+            // 密码锁：没解开时按 F 不开柜，弹密码面板（输对一次永记，之后走正常开柜）
+            if (requirePassword && !unlocked)
+            {
+                if (PasswordPad.IsOpen) return; // 面板开着时 F 不重复弹（防重置输入）
+                AudibleAudio.PlayAt(openClip, transform.position);
+                PasswordPad.Open(password, OnPasswordSuccess, OnPasswordWrong, null);
+                return;
+            }
+
             AudibleAudio.PlayAt(openClip, transform.position);
-            ContainerUI.Open(this); // 打开独立存取界面（自动暂停游戏）
+            ContainerUI.Open(this); // 打开独立取物界面（自动暂停游戏）
         }
+    }
+
+    /// <summary> 密码输对（PasswordPad 回调）：永记解锁状态 → 打开柜子取东西 </summary>
+    private void OnPasswordSuccess()
+    {
+        unlocked = true;
+        Debug.Log("[箱子] " + name + " 密码正确，已解锁！本次游戏内不再需要输密码", gameObject);
+        if (successClip != null) AudibleAudio.PlayAt(successClip, transform.position); // 密码正确音效
+        AudibleAudio.PlayAt(openClip, transform.position);
+        ContainerUI.Open(this);
+    }
+
+    /// <summary> 密码输错（PasswordPad 回调）：红闪由面板自带，这里播音效；次数不限 </summary>
+    private void OnPasswordWrong()
+    {
+        AudibleAudio.PlayAt(wrongClip, transform.position);
     }
 
     // ======== 内容物取出（ContainerUI 调用；玩家只能取不能放） ========
@@ -204,9 +260,9 @@ public class Container : MonoBehaviour
         // 关掉提示 UI，不能再打开
         if (promptUI != null) promptUI.SetActive(false);
 
-        // 碰撞体改 Trigger：废墟不挡路不挡子弹（可被打中会反复触发 TakeDamage？不会——isDead 后 HealthSystem 直接 return）
+        // 碰撞体彻底禁用：玩家可以直接走过废墟（破损贴图保留在地上当装饰）
         BoxCollider2D col = GetComponent<BoxCollider2D>();
-        if (col != null) col.isTrigger = true;
+        if (col != null) col.enabled = false;
     }
 
     /// <summary> 把一件物品生成掉落拾取物（字段全量回填，弹药/耐久状态原样保留） </summary>

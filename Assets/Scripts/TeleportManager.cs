@@ -7,6 +7,9 @@ public class TeleportManager : MonoBehaviour
 {
     public static TeleportManager Instance;
 
+    /// <summary> 任意传送阵使用时广播（宝石伏击系统订阅用）：Portal 同场景/跨场景传送都会先调 SetSpawnPosition，在此统一广播 </summary>
+    public static System.Action OnAnyTeleport;
+
     private Vector2 spawnPosition;
     private bool hasSpawnData = false;
 
@@ -76,6 +79,7 @@ public class TeleportManager : MonoBehaviour
     {
         spawnPosition = pos;
         hasSpawnData = true;
+        OnAnyTeleport?.Invoke(); // 广播"有传送发生"（伏击系统等订阅者用）
         Debug.Log("保存传送位置：" + pos);
     }
 

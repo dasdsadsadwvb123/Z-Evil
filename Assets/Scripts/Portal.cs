@@ -28,8 +28,18 @@ public class Portal : MonoBehaviour
     [Tooltip("用 KeyDatabase 里的哪个卡槽（0~7）：卡槽里填 keyID + 钥匙显示名")]
     [Range(0, 7)]
     public int keySlot = 0;
-    [Tooltip("房间名：进圈提示显示'XX室——按 F 进入'（不填就用上面的普通提示文字）")]
+    [Tooltip("房间名：进圈提示优先显示这行字（所有传送器通用；不填走系统默认提示链）")]
     public string roomName = "";
+    [Tooltip("按 F 后显示的文字：填了就覆盖系统默认提示——卡住/缺钥匙/机关锁时显示它、传送时以 toast 弹出；不填走系统默认")]
+    public string fMessage = "";
+
+    [Header("宝石铁门（可选：拖入后按 F 不传送，改为弹背包镶嵌宝石；不拖 = 普通传送门零漂移）")]
+    [Tooltip("绑定同物体或门位置的 GemDoor 组件：三颗宝石没镶完时按 F 只弹背包")]
+    public GemDoor gemDoor;
+
+    [Header("卡住的门（优先级最高：进圈统一显示'门被卡住了'，按 F 无效——其他一切锁都开不了它）")]
+    [Tooltip("门被卡住：勾上后无论钥匙/机关/宝石怎么解都不开（剧情上'永久卡死'的门）。以后想'撞开'就调 Unstick()")]
+    public bool stuck = false;
 
     [Header("破门设置")]
     [SerializeField] private bool needBreach = false;
@@ -124,12 +134,31 @@ public class Portal : MonoBehaviour
     {
        if (playerInRange && Input.GetKeyDown(interactKey))
        {
-            // 锁定守卫：机关没激活时按 F 不传送——提示换锁定文案 + 抖一下（复用现有反馈，玩家知道"按了也没用"）
+            // 卡住的门：优先级最高的守卫——按 F 永远无效（抖动反馈"按了也没用"），压过板锁/宝石门/钥匙锁/传送
+            if (stuck)
+            {
+                Debug.Log("[传送门] " + name + " 被卡住了，按不开");
+                UpdatePromptText(string.IsNullOrEmpty(fMessage) ? "门被卡住了" : fMessage); // 自定义 F 文字优先
+                StartCoroutine(ShakeText());
+                return;
+            }
+
+            // 锁定守卫：机关没激活时按 F 不传送——自定义 F 文字优先，没填用锁定文案 + 抖动反馈
             if (isLocked)
             {
                 Debug.Log("[传送门] 机关未激活，出口锁定中");
-                UpdatePromptText(lockedPromptText);
+                UpdatePromptText(string.IsNullOrEmpty(fMessage) ? lockedPromptText : fMessage);
                 StartCoroutine(ShakeText());
+                return;
+            }
+
+            // 宝石铁门：三颗宝石没镶完时按 F 不传送——弹出玩家背包（在里面选中宝石按 E 镶嵌）。
+            // 镶完后 gemDoor.IsComplete = true → 走到下面正常传送判定。
+            if (gemDoor != null && !gemDoor.IsComplete)
+            {
+                InventoryUI bag = FindObjectOfType<InventoryUI>();
+                Debug.Log("[宝石门诊断] 宝石门分支进入，背包查找=" + (bag != null ? "成功" : "失败 ⚠️ 身上没有 InventoryUI")); // ⚠️ 排查用临时日志
+                if (bag != null) bag.OpenExternal();
                 return;
             }
 
@@ -147,7 +176,8 @@ public class Portal : MonoBehaviour
                 {
                     string keyName = KeyDatabase.GetKeyName(keySlot);
                     Debug.Log("[传送门] " + name + " 需要【" + keyName + "】（卡槽 " + keySlot + "，ID=" + keyID + "），背包里没有，禁止传送");
-                    UpdatePromptText("需要：" + keyName);
+                    // 自定义 F 文字优先：填了 fMessage 就显示它，没填显示"需要：XX钥匙"
+                    UpdatePromptText(string.IsNullOrEmpty(fMessage) ? "需要：" + keyName : fMessage);
                     StartCoroutine(ShakeText());
                     return;
                 }
@@ -171,6 +201,17 @@ public class Portal : MonoBehaviour
                 return;
             }
 
+           // 自定义 F 文字：填了就以 toast 弹出（传送瞬间玩家出圈会关掉提示框，toast 恒显 2 秒更稳），没填静默传送
+           if (!string.IsNullOrEmpty(fMessage))
+           {
+               if (playerInventory == null)
+               {
+                   GameObject pp = GameObject.FindGameObjectWithTag("Player");
+                   if (pp != null) playerInventory = pp.GetComponent<Inventory>();
+               }
+               playerInventory?.OnItemNotice?.Invoke(fMessage);
+           }
+
            Debug.Log("玩家按下交互键，传送至：" + targetSceneName);
            TeleportTracker.CountTeleport();
 
@@ -178,24 +219,35 @@ public class Portal : MonoBehaviour
             {
                 TeleportManager.Instance.SetSpawnPosition(spawnPosition);
                 PixelGridMovement pm = FindObjectOfType<PixelGridMovement>();
-                if (pm != null) pm.TeleportTo(spawnPosition);
+                // 同场景传送：渐黑 → 瞬移（黑透瞬间执行，玩家看不到"人闪现"）→ 渐亮
+                FadeController.Transition(() => { if (pm != null) pm.TeleportTo(spawnPosition); });
             }
             else
             {
                 TeleportManager.Instance.SetSpawnPosition(spawnPosition);
-                SceneManager.LoadScene(targetSceneName);
+                // 跨场景传送：渐黑 0.6s → 加载新场景 → 渐亮 0.8s
+                FadeController.TransitionToScene(targetSceneName);
             }
         }
     }
 
     // ======== 锁定/解锁（给 PlateSwitchBoard 的 UnityEvent 接线用） ========
 
+    /// <summary> 解除卡住状态（预留：以后剧情"门被撞开"之类接线用，本期不接） </summary>
+    public void Unstick()
+    {
+        stuck = false;
+        Debug.Log("[传送门] " + name + " 不再卡住了");
+        if (playerInRange && promptUIText != null) UpdatePromptText(GetEnterPromptText());
+    }
+
     /// <summary> 锁定传送门（机关复位时调）：按 F 不传送，提示换锁定文案 </summary>
     public void Lock()
     {
         isLocked = true;
         Debug.Log("[传送门] " + name + " 已锁定");
-        if (playerInRange && promptUIText != null) UpdatePromptText(lockedPromptText);
+        // 卡住的门保持"门被卡住了"文案（GetEnterPromptText 里 stuck 优先级最高）
+        if (playerInRange && promptUIText != null) UpdatePromptText(GetEnterPromptText());
     }
 
     /// <summary> 解锁传送门（全部压力板压下时调）：按 F 正常传送 </summary>
@@ -217,12 +269,13 @@ public class Portal : MonoBehaviour
             promptUIText.text = text;
     }
 
-    /// <summary> 进圈提示：板锁 = 锁定文案；要钥匙 = "房间名——按 F 进入"（没填房间名用普通提示）；普通 = 原提示 </summary>
+    /// <summary> 进圈提示：roomName 自定义最优先（填了就显示它）；为空走系统默认链——板锁 = 锁定文案；宝石门未镶完 = doorName；requireKey = 原提示；普通 = 原提示。
+    /// （"门被卡住了"不在进圈提示里——它只在按 F 时出现，见 Update 的 stuck 守卫） </summary>
     private string GetEnterPromptText()
     {
+        if (!string.IsNullOrEmpty(roomName)) return roomName;
         if (isLocked) return lockedPromptText;
-        if (requireKey && !string.IsNullOrEmpty(roomName))
-            return roomName + "——按 F 进入";
+        if (gemDoor != null && !gemDoor.IsComplete) return gemDoor.doorName;
         return promptText;
     }
 

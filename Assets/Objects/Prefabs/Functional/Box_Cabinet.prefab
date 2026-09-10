@@ -11,8 +11,9 @@ GameObject:
   - component: {fileID: 2334800899975488686}
   - component: {fileID: 4592956064498099688}
   - component: {fileID: 5916413562535965808}
+  - component: {fileID: -3913416702719530169}
   m_Layer: 3
-  m_Name: "\u8863\u67DC_0"
+  m_Name: Box_Cabinet
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -130,3 +131,25 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 2, y: 2.279046}
   m_EdgeRadius: 0
+--- !u!114 &-3913416702719530169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1044058164232927961}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a94d2261e30003b46802508f09912d5e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 0
+  starterItems: []
+  normalSprite: {fileID: 1160903815, guid: 4e27b4813e0309340be2bf51f8bc2001, type: 3}
+  brokenSprite: {fileID: 0}
+  interactRange: 1.5
+  openClip: {fileID: 8300000, guid: 436a25881fcc44543a9471ef615532bb, type: 3}
+  takeClip: {fileID: 0}
+  breakClip: {fileID: 0}
+  breakableHealth: 4
+  contents: []

@@ -19,6 +19,12 @@ public class ContainerUI : MonoBehaviour
     /// <summary> 界面当前是否开着（Container 开门前查它，防止"按 F 关闭的同帧又被重新打开"的帧序 bug） </summary>
     public static bool IsOpen { get; private set; }
 
+    /// <summary> 关闭发生在哪一帧（Time.frameCount）：Container 对关闭当帧的 F 视而不见，杜绝"关了又被同帧重开" </summary>
+    public static int LastClosedFrame { get; private set; } = -1;
+
+    /// <summary> 界面在哪一帧被打开：开柜当帧的 F 不算关闭指令（同一次按键不能既开又关） </summary>
+    private int openedFrame = -1;
+
     private Container box;                 // 当前打开的箱子
     private Inventory playerInventory;     // 玩家背包（取出的东西进这里）
     private GameObject canvasObj;
@@ -61,6 +67,7 @@ public class ContainerUI : MonoBehaviour
         EnsureEventSystem(); // 鼠标点击需要 EventSystem（场景里没有就自动补）
 
         IsOpen = true;
+        openedFrame = Time.frameCount; // 开柜当帧记下：这一帧的 F 不能当关闭指令（否则开→同帧自关=永远只能开一次）
         Time.timeScale = 0f; // 暂停惯例（和玩家背包一致）
         selectedIndex = 0;
         CreateUI();
@@ -252,7 +259,14 @@ public class ContainerUI : MonoBehaviour
     {
         if (box == null) return;
 
-        if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.Escape))
+        // F 关闭：开柜当帧的 F 不算（同一次按键既开又关 = "只能打开一次"的真根因）；
+        // TAB/ESC 不受此限制，任何时候都能关
+        if (Input.GetKeyDown(KeyCode.F) && Time.frameCount != openedFrame)
+        {
+            Close();
+            return;
+        }
+        if (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.Escape))
         {
             Close();
             return;
@@ -290,6 +304,7 @@ public class ContainerUI : MonoBehaviour
     private void Close()
     {
         IsOpen = false;
+        LastClosedFrame = Time.frameCount; // 标记：这帧关的，Container 这帧别再开门
         Time.timeScale = 1f;
         box = null;
         if (canvasObj != null) Destroy(canvasObj);
@@ -298,6 +313,7 @@ public class ContainerUI : MonoBehaviour
     private void OnDestroy()
     {
         IsOpen = false;
+        LastClosedFrame = Time.frameCount;
         if (canvasObj != null) { Time.timeScale = 1f; Destroy(canvasObj); }
     }
 }

@@ -143,13 +143,31 @@ public class BossSawAI : MonoBehaviour
 
     private void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
+        CacheComponents(); // 幂等补齐组件（宝石伏击系统 Instantiate 同帧调 RefreshAt 时，也走这里自愈）
+
+        homePos = rb.position;
+        targetGridPos = rb.position;
+        SnapToGrid();
+
+        // 血条照样生成（默认 showHealthBar=false → 创建后立即隐藏，永不渲染）
+        if (showHealthBar) CreateHealthBar();
+    }
+
+    /// <summary>
+    /// 缓存/补齐全部组件引用（幂等，可重复调用）：
+    /// Start 走一遍；宝石伏击系统 Instantiate 同帧调 RefreshAt 时，新实例的 Start 下一帧才跑，
+    /// 由 RefreshAt 开头再走一遍自愈补齐——刚出生也能被指挥，不 NRE。
+    /// 订阅/音源启动只在"第一次补到"时执行，不会重复订阅或重复开播。
+    /// </summary>
+    private void CacheComponents()
+    {
         if (rb == null)
         {
-            rb = gameObject.AddComponent<Rigidbody2D>();
+            rb = GetComponent<Rigidbody2D>();
+            if (rb == null) rb = gameObject.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Kinematic; // 网格步进，不吃物理推挤
+            rb.freezeRotation = true;
         }
-        rb.bodyType = RigidbodyType2D.Kinematic; // 网格步进，不吃物理推挤
-        rb.freezeRotation = true;
 
         if (GetComponent<Collider2D>() == null)
         {
@@ -158,45 +176,47 @@ public class BossSawAI : MonoBehaviour
             col.size = new Vector2(0.9f, 0.9f);
         }
 
-        sr = GetComponent<SpriteRenderer>();
-        animator = GetComponent<Animator>();
+        if (sr == null) sr = GetComponent<SpriteRenderer>();
+        if (animator == null) animator = GetComponent<Animator>();
 
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
+        if (player == null)
         {
-            player = playerObj.transform;
-            playerHealth = playerObj.GetComponent<HealthSystem>();
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+                playerHealth = playerObj.GetComponent<HealthSystem>();
+            }
         }
 
-        myHealth = GetComponent<HealthSystem>();
-        if (myHealth != null)
+        if (myHealth == null)
         {
-            myHealth.deathTriggerName = "";   // Boss 没有死亡动画状态，死亡表现由本脚本接管
-            myHealth.destroyOnDeath = false;
-            myHealth.OnDamaged += OnHurt;     // 受击闪白
-            myHealth.OnDeath += OnBossDeath;
+            myHealth = GetComponent<HealthSystem>();
+            if (myHealth != null)
+            {
+                myHealth.deathTriggerName = "";   // Boss 没有死亡动画状态，死亡表现由本脚本接管
+                myHealth.destroyOnDeath = false;
+                myHealth.OnDamaged += OnHurt;     // 受击闪白
+                myHealth.OnDeath += OnBossDeath;
+            }
+            else
+            {
+                Debug.LogWarning("[电锯哥] 身上没有 HealthSystem，打不死也死不了！", gameObject);
+            }
         }
-        else
+
+        if (audioSource == null)
         {
-            Debug.LogWarning("[电锯哥] 身上没有 HealthSystem，打不死也死不了！", gameObject);
+            // 循环锯声：登场就响（乌鸦 flock 同款自动补音源）
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.loop = true;
+            audioSource.clip = chainsawLoopClip;
+            audioSource.volume = loopVolume;
+            audioSource.pitch = 1f;
+            if (chainsawLoopClip != null) audioSource.Play();
         }
-
-        // 循环锯声：登场就响（乌鸦 flock 同款自动补音源）
-        audioSource = GetComponent<AudioSource>();
-        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
-        audioSource.playOnAwake = false;
-        audioSource.loop = true;
-        audioSource.clip = chainsawLoopClip;
-        audioSource.volume = loopVolume;
-        audioSource.pitch = 1f;
-        if (chainsawLoopClip != null) audioSource.Play();
-
-        homePos = rb.position;
-        targetGridPos = rb.position;
-        SnapToGrid();
-
-        // 血条照样生成（默认 showHealthBar=false → 创建后立即隐藏，永不渲染）
-        if (showHealthBar) CreateHealthBar();
     }
 
     private void OnDestroy()
@@ -732,6 +752,42 @@ public class BossSawAI : MonoBehaviour
     private void ApplyTint()
     {
         if (sr != null) sr.color = baseColor;
+    }
+
+    // ======== 宝石伏击系统调用（GemAmbushSystem 专用公开接口，本脚本其余逻辑不碰） ========
+
+    /// <summary>
+    /// 伏击刷新（宝石伏击/传送回大厅都用它）：瞬移到 pos + 巡逻中心重置为 pos（"游走" = 现有巡逻逻辑在新中心跑）
+    /// + 清掉进行中的巡逻/追击目标与仇恨（hasSeenPlayer=false 回巡逻音调）+ 跨场景后重找玩家引用。
+    /// 要追击就紧接着调 ActivateChase()。
+    /// </summary>
+    public void RefreshAt(Vector2 pos)
+    {
+        if (dead) return;
+
+        // 自愈式初始化（幂等）：刚 Instantiate 的实例 Start 还没跑 → 这里现场补齐 rb/玩家/音源等全部引用
+        //（顺带覆盖跨场景后旧玩家引用失效的重找——补不到才维持 null，ChaseStep 会安静跳过）
+        CacheComponents();
+
+        // 清进行中的移动/巡逻目标
+        hasPatrolTarget = false;
+        hasSeenPlayer = false;   // 大厅游走 = 不追（宝石伏击随后调 ActivateChase 再拉起仇恨）
+        isMoving = false;
+
+        // 巡逻中心 = 刷新点（吸附整数格），本体瞬移过去
+        homePos = new Vector2(Mathf.Round(pos.x / gridSize) * gridSize, Mathf.Round(pos.y / gridSize) * gridSize);
+        targetGridPos = homePos;
+        rb.position = homePos;
+
+        SetIdleAnim();
+        Debug.Log("[电锯哥] 伏击刷新到 " + homePos, gameObject);
+    }
+
+    /// <summary> 激活追击（宝石伏击：刷新到宝石房间后调用；与常规发现玩家的永久仇恨同语义） </summary>
+    public void ActivateChase()
+    {
+        if (dead) return;
+        hasSeenPlayer = true;
     }
 
     private void SnapToGrid()
