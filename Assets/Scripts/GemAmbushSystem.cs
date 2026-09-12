@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -37,6 +38,16 @@ public class GemAmbushSystem : MonoBehaviour
     public string pinkID = "GemPink";
     public string orangeID = "GemOrange";
 
+    [Header("主角独白（锯子哥每次伏击各一句话；复用现有 DialogueManager；-1 = 不说话）")]
+    [Tooltip("捡到红宝石（第 1 次伏击）时播放的对话组编号；-1 = 不说话")]
+    public int rubyLineGroup = -1;
+    [Tooltip("捡到粉宝石（第 2 次伏击）时播放的对话组编号；-1 = 不说话")]
+    public int pinkLineGroup = -1;
+    [Tooltip("捡到橙宝石（第 3 次伏击）时播放的对话组编号；-1 = 不说话")]
+    public int orangeLineGroup = -1;
+    [Tooltip("播独白时是否冻结玩家（默认关：伏击时你还在被追，别冻死。勾了 = 说话期间不能动，说完自动解冻）")]
+    public bool freezePlayerOnLine = false;
+
     // ---- 运行时状态 ----
     private BossSawAI saw;                 // 唯一的锯子实例（null = 还没出现）
     private bool sawDead = false;          // 锯子死了 → 全部触发永久失效
@@ -47,6 +58,8 @@ public class GemAmbushSystem : MonoBehaviour
     private bool lastHadPink = false;
     private bool lastHadOrange = false;
     private Inventory playerInventory;     // 玩家背包（懒查找：场景切换自动重找）
+    private DialogueManager dialogueManager; // 主角独白用（懒查找，找不到就静默跳过）
+    private PixelGridMovement playerMovement; // 冻结玩家用（只有 freezePlayerOnLine 勾上才用）
 
     // ---- 世界进度表钥匙（全局，不按场景分：锯子是全局唯一单例） ----
     private const string KeySawDead = "Ambush_SawDead";
@@ -119,6 +132,55 @@ public class GemAmbushSystem : MonoBehaviour
         s.ActivateChase();     // 激活追击（永久仇恨）
         WorldState.Set(AmbushKeyFor(gemName), 1); // 世界进度表登记"这颗宝石已触发过伏击"
         Debug.Log("[宝石伏击] 玩家捡到" + gemName + "！锯子哥刷新到 " + pos + " 并开始追击", gameObject);
+
+        // 锯子登场/开始追击的这一步 → 主角独白（复用 DialogueManager；不新建系统）
+        PlayMonologue(gemName);
+    }
+
+    /// <summary> 按宝石名播放对应主角独白（组编号 &lt; 0 = 不说话；找不到 DialogueManager 静默跳过、不报错） </summary>
+    private void PlayMonologue(string gemName)
+    {
+        int group = LineGroupFor(gemName);
+        if (group < 0) return; // -1 = 不播（零漂移：不配置就跟原来一模一样）
+
+        // 懒查找并缓存（场景切换后旧引用销毁会自动重找）
+        if (dialogueManager == null) dialogueManager = FindObjectOfType<DialogueManager>();
+        if (dialogueManager == null) return; // 场景里没有对话板 → 静默跳过
+
+        if (freezePlayerOnLine)
+        {
+            if (playerMovement == null) playerMovement = FindObjectOfType<PixelGridMovement>();
+            StartCoroutine(PlayLineAndRestore(group)); // 冻结 → 说话 → 说完自动解冻
+        }
+        else
+        {
+            dialogueManager.PlayGroup(group); // 默认：不冻结，边跑边说（伏击时你还在被追）
+        }
+    }
+
+    /// <summary> 宝石名 → 对话组编号（-1 = 不播） </summary>
+    private int LineGroupFor(string gemName)
+    {
+        if (gemName == "红宝石") return rubyLineGroup;
+        if (gemName == "粉宝石") return pinkLineGroup;
+        return orangeLineGroup;
+    }
+
+    /// <summary> 冻结玩家 → 播独白 → 播完解冻（仅 freezePlayerOnLine 勾上时走这条；复用 TriggerEvent 的冻结方式） </summary>
+    private IEnumerator PlayLineAndRestore(int group)
+    {
+        bool froze = false;
+        if (playerMovement != null)
+        {
+            playerMovement.frozen = true; // 与 TriggerEvent 同款：置 PixelGridMovement.frozen
+            froze = true;
+        }
+
+        dialogueManager.PlayGroup(group);
+        // 等这组独白播完（对话板被中途销毁也安全退出）
+        yield return new WaitUntil(() => dialogueManager == null || !dialogueManager.isPlaying);
+
+        if (froze && playerMovement != null) playerMovement.frozen = false;
     }
 
     /// <summary> 宝石名 → 世界进度表钥匙 </summary>

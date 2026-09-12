@@ -45,12 +45,16 @@ public class InventoryUI : MonoBehaviour
 
     private Inventory inventory;
     private GameObject canvasObj;
-    private GameObject slotContainer;   // 物品网格「视口」：RectMask2D 裁剪，ApplyView 切换的就是它（含面板底 + 滚动条）
+    private GameObject bagPanel;        // 背包统一暗色面板（左信息栏 + 右物品网格都装在里面 → 不再压游戏画面）
+    private GameObject slotContainer;   // 物品网格「视口」：RectMask2D 裁剪（面板右半栏）
     private GameObject slotContent;     // 网格「内容容器」：格子都挂这里，滚动位移只作用于它
     private RectTransform contentRect;  // slotContent 的 RectTransform（缓存，省掉每次 GetComponent）
     private RectTransform viewportRect; // 视口的 RectTransform
     private GameObject scrollbarTrack;  // 极简滚动条：轨道
     private GameObject scrollbarHandle; // 极简滚动条：滑块
+    private GameObject infoBoard;       // 物品信息区底板（米白色）
+    private Text infoNameText;          // 物品名称（黑字，标题感）
+    private Text infoDescText;          // 物品描述（黑字，自动换行）
     private float cellW, cellH, cellSpacing;  // 运行时算出的格子宽 / 高 / 间距（已乘 inventoryScale）
     private float contentHeight = 0f;         // 内容总高（按当前物品数算）
     private float viewportHeight = 0f;        // 视口高（= 可见行数那一屏）
@@ -299,13 +303,11 @@ public class InventoryUI : MonoBehaviour
     /// <summary> 切换物品视图 / 纸条视图的显示（两个视图共用同一暗色底） </summary>
     private void ApplyView(bool showNotes)
     {
-        if (slotContainer != null) slotContainer.SetActive(!showNotes);
+        if (bagPanel != null) bagPanel.SetActive(!showNotes); // 背包整块（左信息栏 + 右网格）一起切
         if (notesPanel != null) notesPanel.SetActive(showNotes);
 
         Transform tipT = canvasObj != null ? canvasObj.transform.Find("Tip") : null;
         if (tipT != null) tipT.gameObject.SetActive(!showNotes);
-        Transform infoT = canvasObj != null ? canvasObj.transform.Find("Info") : null;
-        if (infoT != null) infoT.gameObject.SetActive(!showNotes);
     }
 
     /// <summary> 按 NoteJournal 刷新纸条列表显示（标题 + 高亮；空则灰字提示；中部大字动态摆放） </summary>
@@ -775,8 +777,27 @@ public class InventoryUI : MonoBehaviour
         float viewH = visibleRows * cellH + (visibleRows - 1) * cellSpacing + 2f * cellSpacing;
         viewportHeight = viewH;
 
+        // ===== 统一暗色面板：左「物品信息栏」 + 右「物品网格」（两者同处一块面板 → 信息区不再压着游戏画面） =====
+        float infoW = 210f * scale;   // 左信息栏宽（小泽要求：在原来的基础上减半）
+        float gap = 24f * scale;      // 信息栏与网格之间的间距
+        float pad = 20f * scale;      // 面板内边距
+        float panelW = infoW + gap + viewW + pad * 2f;
+        float panelH = viewH + pad * 2f;
+
+        bagPanel = new GameObject("BagPanel", typeof(RectTransform));
+        bagPanel.transform.SetParent(canvasObj.transform, false);
+        Image bagBg = bagPanel.AddComponent<Image>();
+        bagBg.color = new Color(0.06f, 0.06f, 0.08f, 0.92f); // 与网格同色（左栏与右网格融为一体）
+        bagBg.raycastTarget = false;                          // 不吃点击
+        RectTransform bagRect = bagPanel.GetComponent<RectTransform>();
+        bagRect.anchorMin = new Vector2(0.5f, 0.5f);
+        bagRect.anchorMax = new Vector2(0.5f, 0.5f);
+        bagRect.pivot = new Vector2(0.5f, 0.5f);
+        bagRect.anchoredPosition = Vector2.zero;
+        bagRect.sizeDelta = new Vector2(panelW, panelH);
+
         slotContainer = new GameObject("GridViewport", typeof(RectTransform));
-        slotContainer.transform.SetParent(canvasObj.transform, false);
+        slotContainer.transform.SetParent(bagPanel.transform, false); // 挂进面板（右半栏）
         Image viewBg = slotContainer.AddComponent<Image>();
         viewBg.color = new Color(0.06f, 0.06f, 0.08f, 0.9f);  // 背包面板底色（放大后能看出是一块面板）
         viewBg.raycastTarget = false;                         // 不吃鼠标点击，避免挡住别的 UI
@@ -785,7 +806,7 @@ public class InventoryUI : MonoBehaviour
         viewportRect.anchorMin = new Vector2(0.5f, 0.5f);
         viewportRect.anchorMax = new Vector2(0.5f, 0.5f);
         viewportRect.pivot = new Vector2(0.5f, 0.5f);
-        viewportRect.anchoredPosition = Vector2.zero;
+        viewportRect.anchoredPosition = new Vector2(panelW * 0.5f - pad - viewW * 0.5f, 0f); // 靠面板右半栏
         viewportRect.sizeDelta = new Vector2(viewW, viewH);
 
         // 内容容器：GridLayoutGroup 挂这里；滚动 = 改它的 anchoredPosition.y
@@ -823,20 +844,8 @@ public class InventoryUI : MonoBehaviour
         tipRect.anchoredPosition = new Vector2(0, 30f);
         tipRect.sizeDelta = new Vector2(500f * scale, 40f); // 字号变大 → 提示行同步加宽，别被截断
 
-        // 物品信息显示
-        GameObject info = new GameObject("Info");
-        info.transform.SetParent(canvasObj.transform, false);
-        Text infoText = info.AddComponent<Text>();
-        infoText.fontSize = Mathf.RoundToInt(22f * scale); // 顶部物品信息：随倍率放大
-        infoText.color = Color.white;
-        infoText.alignment = TextAnchor.UpperLeft;
-        infoText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        RectTransform infoRect = info.GetComponent<RectTransform>();
-        infoRect.anchorMin = new Vector2(0.5f, 1f);
-        infoRect.anchorMax = new Vector2(0.5f, 1f);
-        infoRect.pivot = new Vector2(0.5f, 1f);
-        infoRect.anchoredPosition = new Vector2(0, -20f);
-        infoRect.sizeDelta = new Vector2(600f * scale, 100f * scale); // 字号变大 → 信息区同步放大，保证行数不被截
+        // ===== 物品信息区：移进面板左栏，铺米白底板 + 黑字（不再压着游戏画面） =====
+        CreateInfoBoard(panelW, infoW, viewH, pad, scale);
 
         // 新增：操作菜单面板（默认隐藏）
         CreateMenuPanel();
@@ -853,6 +862,78 @@ public class InventoryUI : MonoBehaviour
 
         selectedIndex = 0;
         RefreshSlots();
+    }
+
+    /// <summary> 创建物品信息区（面板左栏）：米白底板 + 黑字（名称标题 + 描述正文，自动换行、超出截断） </summary>
+    private void CreateInfoBoard(float panelW, float infoW, float infoH, float pad, float scale)
+    {
+        // 米白/纸色底板（对齐 NoteReaderUI 的纸色）
+        infoBoard = new GameObject("InfoBoard", typeof(RectTransform));
+        infoBoard.transform.SetParent(bagPanel.transform, false);
+        Image boardImg = infoBoard.AddComponent<Image>();
+        boardImg.color = new Color(0.96f, 0.95f, 0.9f, 0.95f); // 与 NoteReaderUI 纸片完全同色（米白）
+        boardImg.raycastTarget = false;
+        RectTransform boardRect = infoBoard.GetComponent<RectTransform>();
+        boardRect.anchorMin = new Vector2(0.5f, 0.5f);
+        boardRect.anchorMax = new Vector2(0.5f, 0.5f);
+        boardRect.pivot = new Vector2(0.5f, 0.5f);
+        // 左栏中心 = -面板宽/2 + 内边距 + 信息栏宽/2
+        boardRect.anchoredPosition = new Vector2(-panelW * 0.5f + pad + infoW * 0.5f, 0f);
+        boardRect.sizeDelta = new Vector2(infoW, infoH);
+
+        // 与纸条纸片同款边框（暗一圈，模拟纸片边缘/阴影）——参数逐值对齐 NoteReaderUI
+        GameObject border = new GameObject("Border", typeof(RectTransform));
+        border.transform.SetParent(infoBoard.transform, false);
+        Image borderImg = border.AddComponent<Image>();
+        borderImg.color = new Color(0.55f, 0.52f, 0.45f, 0.9f); // 纸边灰褐（与纸条同色）
+        RectTransform borderRect = borderImg.GetComponent<RectTransform>();
+        borderRect.anchorMin = Vector2.zero;
+        borderRect.anchorMax = Vector2.one;
+        borderRect.offsetMin = new Vector2(-4f, -4f) * scale; // 边框外扩（随 inventoryScale 缩放）
+        borderRect.offsetMax = new Vector2(4f, 4f) * scale;
+        borderImg.raycastTarget = false;
+        borderRect.SetSiblingIndex(0); // 与纸条同款层次（垫到信息板下）
+
+        float inner = 12f * scale;            // 板内边距（窄板收紧一点，给文字多留宽度）
+        float nameH = 40f * scale;            // 名称行高
+        float textW = infoW - inner * 2f;     // 文字宽度（板宽减左右内边距）
+
+        // 名称（黑字加粗，标题感）——左上锚定 + 固定尺寸（不用 offset，避免与 anchoredPosition 打架）
+        GameObject nameGO = new GameObject("Name", typeof(RectTransform));
+        nameGO.transform.SetParent(infoBoard.transform, false);
+        infoNameText = nameGO.AddComponent<Text>();
+        infoNameText.fontSize = Mathf.RoundToInt(22f * scale); // 窄板：字号适度下调，避免名称挤成两字一行
+        infoNameText.fontStyle = FontStyle.Bold;
+        infoNameText.color = Color.black;
+        infoNameText.alignment = TextAnchor.MiddleLeft;
+        infoNameText.horizontalOverflow = HorizontalWrapMode.Wrap; // 名字过长也换行，不越出板
+        infoNameText.verticalOverflow = VerticalWrapMode.Truncate;
+        infoNameText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        infoNameText.raycastTarget = false;
+        RectTransform nameRect = nameGO.GetComponent<RectTransform>();
+        nameRect.anchorMin = new Vector2(0f, 1f);
+        nameRect.anchorMax = new Vector2(0f, 1f);
+        nameRect.pivot = new Vector2(0f, 1f);
+        nameRect.anchoredPosition = new Vector2(inner, -inner);
+        nameRect.sizeDelta = new Vector2(textW, nameH);
+
+        // 描述（黑字，自动换行；超出板高自动截断，不撑爆面板）
+        GameObject descGO = new GameObject("Desc", typeof(RectTransform));
+        descGO.transform.SetParent(infoBoard.transform, false);
+        infoDescText = descGO.AddComponent<Text>();
+        infoDescText.fontSize = Mathf.RoundToInt(17f * scale); // 窄板：描述字号下调，行数变多但仍自动换行/截断
+        infoDescText.color = new Color(0.12f, 0.12f, 0.12f, 1f); // 近黑（比纯黑柔和，纸面上更耐看）
+        infoDescText.alignment = TextAnchor.UpperLeft;
+        infoDescText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        infoDescText.verticalOverflow = VerticalWrapMode.Truncate;
+        infoDescText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        infoDescText.raycastTarget = false;
+        RectTransform descRect = descGO.GetComponent<RectTransform>();
+        descRect.anchorMin = new Vector2(0f, 1f);
+        descRect.anchorMax = new Vector2(0f, 1f);
+        descRect.pivot = new Vector2(0f, 1f);
+        descRect.anchoredPosition = new Vector2(inner, -(inner + nameH + 8f * scale));
+        descRect.sizeDelta = new Vector2(textW, Mathf.Max(0f, infoH - inner * 2f - nameH - 8f * scale));
     }
 
     /// <summary> 创建操作菜单（使用/合成/取消） </summary>
@@ -1229,23 +1310,28 @@ public class InventoryUI : MonoBehaviour
 
     private void UpdateInfo()
     {
-        Transform infoT = canvasObj?.transform.Find("Info");
-        if (infoT == null) return;
-        Text t = infoT.GetComponent<Text>();
+        if (infoNameText == null || infoDescText == null) return;
 
-        // 有提示消息且没过期 → 显示消息
+        // 有提示消息且没过期 → 名称留空，消息填在描述板里（米白底黑字）
         if (pendingMessage != null && Time.unscaledTime < messageUntil)
         {
-            t.text = pendingMessage;
+            infoNameText.text = "";
+            infoDescText.text = pendingMessage;
             return;
         }
         pendingMessage = null;
 
-        // 正常显示选中物品信息
+        // 正常显示选中物品：名称（标题感）+ 描述
         InventoryItem item = inventory.GetItemAt(selectedIndex);
         if (item != null)
-            t.text = "<b>" + item.itemName + "</b>\n" + item.description;
+        {
+            infoNameText.text = item.itemName;
+            infoDescText.text = item.description;
+        }
         else
-            t.text = "";
+        {
+            infoNameText.text = "";
+            infoDescText.text = "";
+        }
     }
 }
