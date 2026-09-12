@@ -150,10 +150,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridSize: 1
   moveSpeed: 6
-  detectionRange: 100
+  detectionRange: 12
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 8
+  leashRange: 14
+  useBounds: 0
+  boundsMin: {x: 0, y: 0}
+  boundsMax: {x: 0, y: 0}
   attackDamage: 1
   attackRange: 1
   attackCooldown: 1

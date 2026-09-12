@@ -55,19 +55,10 @@ public class PressurePlate : MonoBehaviour
         if (col != null) col.isTrigger = true; // null 守卫：万一仍加不成（理论到不了）→ 交给 Update 兜底，这里不 NRE
 
         // 音效不再用本地 AudioSource：统一走 AudibleAudio.PlayAt（距离听声，见类头注释的项目惯例）
-
-        // ⚠️ 排查用轻量日志：出现 = 脚本 Awake 活着（物体激活、脚本挂上了、没编译报错）
-        Debug.Log("[压力板] Awake 完成：" + name, gameObject);
     }
 
     private void Start()
     {
-        // ⚠️ 排查用无条件启动日志：几块板就该有几条；没有 = 板子不在本场景/没挂脚本/物体未激活
-        // boxLayer 直接打数值：0 = 一个层都没勾（最常见的漏配，检测永远查不到箱子）
-        Debug.Log("[压力板] 已启动：name=" + name
-            + " 位置=" + (Vector2)transform.position
-            + " boxLayer=" + (int)boxLayer.value, gameObject);
-
         sr = GetComponent<SpriteRenderer>();
         idleSprite = sr != null ? sr.sprite : null;
 

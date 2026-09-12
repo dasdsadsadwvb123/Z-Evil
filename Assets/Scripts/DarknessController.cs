@@ -21,6 +21,13 @@ public class DarknessController : MonoBehaviour
     private Light2D globalLight;
     private int darkZoneCount = 0; // 玩家当前在几个黑屋触发区里（0 = 明亮）
 
+    /// <summary>
+    /// 全局压暗系数（剧情演出用，如暴君狂化）：目标亮度 = 原目标 × 这个值。
+    /// 静态字段：任何脚本直接 DarknessController.globalDimFactor = 0.7f 即可压暗全场景；
+    /// 演出结束记得恢复 1f。黑屋明暗逻辑照常，只是整体再乘一层。
+    /// </summary>
+    public static float globalDimFactor = 1f;
+
     private void Start()
     {
         // 自动认领场景里现成的 Global Light 2D（小泽场景里有的话直接用，不用拖）
@@ -48,8 +55,8 @@ public class DarknessController : MonoBehaviour
     {
         if (globalLight == null) return;
 
-        // 目标亮度：有任何黑屋罩着玩家 → 暗；否则 → 亮。平滑过渡靠 Lerp。
-        float target = IsDark() ? darkIntensity : brightIntensity;
+        // 目标亮度：有任何黑屋罩着玩家 → 暗；否则 → 亮。再乘全局压暗系数（剧情演出用）。平滑过渡靠 Lerp。
+        float target = (IsDark() ? darkIntensity : brightIntensity) * globalDimFactor;
         globalLight.intensity = Mathf.Lerp(globalLight.intensity, target, transitionSpeed * Time.deltaTime);
     }
 

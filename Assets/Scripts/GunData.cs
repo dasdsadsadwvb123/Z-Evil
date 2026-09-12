@@ -21,6 +21,10 @@ public class GunData : ScriptableObject
     [Tooltip("近战武器的耐久上限；设为 0 表示无限耐久（远程枪不用管这个）")]
     public int maxDurability = 0;
 
+    [Header("近战破坏：可打破箱子（Breakable Container）")]
+    [Tooltip("用刀砍'可打破箱子'时消耗多少刀耐久（默认 15；填 0 也按 15 兜底）。普通目标/敌人每下仍只扣 1")]
+    public int meleeBoxDurabilityCost = 15;
+
     [Header("散射设置（散弹枪用；手枪/沙鹰保持默认 = 单发直射，行为和以前完全一样）")]
     [Tooltip("一次开火打出几发弹丸（1 = 单发直射，手枪/沙鹰不用动）")]
     public int pelletCount = 1;

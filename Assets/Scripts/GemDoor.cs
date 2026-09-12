@@ -55,6 +55,14 @@ public class GemDoor : MonoBehaviour
     {
         GameObject p = GameObject.FindGameObjectWithTag("Player");
         if (p != null) player = p.transform;
+
+        // 读档自查：三颗宝石的镶嵌状态从世界进度表整位还原（bit0=橙 bit1=粉 bit2=红）
+        int v = WorldState.Get(WorldState.KeyFor("Gem", this), 0);
+        orangeDone = (v & 1) != 0;
+        pinkDone = (v & 2) != 0;
+        rubyDone = (v & 4) != 0;
+        if (IsComplete)
+            Debug.Log("[宝石门] 读档还原：三颗宝石已镶完", gameObject);
     }
 
     private void OnDestroy()
@@ -88,6 +96,14 @@ public class GemDoor : MonoBehaviour
         if (itemID == gemOrangeID) orangeDone = true;
         else if (itemID == gemPinkID) pinkDone = true;
         else if (itemID == gemRubyID) rubyDone = true;
+        SaveGemState();
+    }
+
+    /// <summary> 把三颗镶嵌状态写进世界进度表（读档还原用） </summary>
+    private void SaveGemState()
+    {
+        int v = (orangeDone ? 1 : 0) | (pinkDone ? 2 : 0) | (rubyDone ? 4 : 0);
+        WorldState.Set(WorldState.KeyFor("Gem", this), v);
     }
 
     // ======== 静态入口（InventoryUI 的 E 键 / Portal 判定调用） ========

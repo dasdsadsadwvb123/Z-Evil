@@ -98,13 +98,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18a29f509735f044199057370f1a9bdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  itemID: 
-  itemName: 
+  itemID: Shotgun shells
+  itemName: "\u9730\u5F39\u67AA\u5B50\u5F39"
   itemType: 4
-  icon: {fileID: 0}
+  icon: {fileID: 340731382, guid: e4aaff308a8a04f47a482a31de6375c7, type: 3}
   description: 
   destroyOnPickup: 1
+  addToInventory: 1
   isKeyItem: 1
+  pickupRange: 2
+  pickupClip: {fileID: 0}
+  pickupVolume: 1
   gunData: {fileID: 0}
   ammoType: 2
   ammoAmount: 3

@@ -122,6 +122,7 @@ public class BossSawAI : MonoBehaviour
     private AudioSource audioSource;
 
     private bool dead = false;
+    private string deathKey;              // 世界进度表钥匙（读档还原"这只死没死"）
     private bool isMoving = false;
     private bool isAttacking = false;
     private bool hasSeenPlayer = false;   // 发现过玩家 = 永久仇恨（Boss 房不脱战）
@@ -151,6 +152,27 @@ public class BossSawAI : MonoBehaviour
 
         // 血条照样生成（默认 showHealthBar=false → 创建后立即隐藏，永不渲染）
         if (showHealthBar) CreateHealthBar();
+
+        // 读档自查：世界进度表记录过"这只已死" → 直接躺尸，不再复活
+        deathKey = WorldState.KeyFor("Dead", this);
+        if (WorldState.GetBool(deathKey))
+            ApplyDeadState();
+    }
+
+    /// <summary> 恢复"已死"状态（读档用）：停锯声 + 关碰撞 + 播死亡定格姿态 </summary>
+    private void ApplyDeadState()
+    {
+        dead = true;
+        if (audioSource != null) audioSource.Stop();
+        Collider2D col = GetComponent<Collider2D>();
+        if (col != null) col.enabled = false;
+        if (animator != null)
+        {
+            int deathHash = Animator.StringToHash("death");
+            if (animator.HasState(0, deathHash))
+                animator.CrossFade(deathHash, 0.05f, 0, 0f);
+        }
+        Debug.Log("[电锯哥] 读档还原：已处于死亡状态", gameObject);
     }
 
     /// <summary>
@@ -418,12 +440,13 @@ public class BossSawAI : MonoBehaviour
 
     private bool IsWalkable(Vector2 pos)
     {
-        if (Physics2D.OverlapBox(pos, Vector2.one * gridSize * 0.9f, 0f, obstacleLayer) != null)
+        // 排除自身/子物体碰撞体（大碰撞体或本物体在障碍层时会"自己挡自己"→ 全方向堵死站桩）
+        if (ObstacleQuery.BlockedAt(pos, Vector2.one * gridSize * 0.9f, transform, obstacleLayer))
             return false;
         Vector2 from = targetGridPos;
         Vector2 toDir = (pos - from).normalized;
         float toDist = Vector2.Distance(from, pos);
-        if (Physics2D.Raycast(from, toDir, toDist, obstacleLayer).collider != null)
+        if (ObstacleQuery.RaycastBlocked(from, toDir, toDist, transform, obstacleLayer))
             return false;
         return true;
     }
@@ -487,6 +510,9 @@ public class BossSawAI : MonoBehaviour
     {
         if (dead) return;
         dead = true;
+
+        // 世界进度表登记"这只已死"（读档还原用）
+        WorldState.Set(deathKey, 1);
 
         // 事件立刻广播（时机不变，接掉落/剧情不用等序列播完）
         onBossDeath?.Invoke();
@@ -571,8 +597,8 @@ public class BossSawAI : MonoBehaviour
         {
             float step = Mathf.Min(deathSlideSpeed * Time.deltaTime, deathSlideMaxDist - slid);
             Vector2 next = rb.position + slideDir * step;
-            // 撞墙物理截停
-            if (Physics2D.OverlapBox(next, Vector2.one * gridSize * 0.6f, 0f, obstacleLayer) != null)
+            // 撞墙物理截停（排除自身，防自己挡自己）
+            if (ObstacleQuery.BlockedAt(next, Vector2.one * gridSize * 0.6f, transform, obstacleLayer))
                 break;
             slid += step;
             rb.MovePosition(next);
@@ -807,7 +833,7 @@ public class BossSawAI : MonoBehaviour
         Canvas canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 310;
-        canvasGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasGO);
         canvasGO.AddComponent<GraphicRaycaster>();
 
         barRoot = new GameObject("BossBarRoot", typeof(RectTransform));

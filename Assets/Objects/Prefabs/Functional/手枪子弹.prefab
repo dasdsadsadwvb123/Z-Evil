@@ -98,16 +98,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18a29f509735f044199057370f1a9bdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  itemID: 
-  itemName: 
+  itemID: Pistol bullets
+  itemName: "\u624B\u67AA\u5B50\u5F39"
   itemType: 4
-  icon: {fileID: 0}
+  icon: {fileID: 478475715, guid: e4aaff308a8a04f47a482a31de6375c7, type: 3}
   description: 
   destroyOnPickup: 1
+  addToInventory: 1
   isKeyItem: 1
+  pickupRange: 2
+  pickupClip: {fileID: 0}
+  pickupVolume: 1
   gunData: {fileID: 0}
   ammoType: 1
-  ammoAmount: 10
+  ammoAmount: 5
   herbType: 1
   healAmount: 1
 --- !u!114 &8356715774930827500

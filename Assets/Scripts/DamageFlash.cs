@@ -115,7 +115,7 @@ public class DamageFlash : MonoBehaviour
         Canvas canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 300;
-        canvasGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasGO);
         canvasGO.AddComponent<GraphicRaycaster>();
 
         // 2. 全屏红色边缘图片（贴图是代码生成的）

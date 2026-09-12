@@ -99,12 +99,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   itemID: GreenHerb
-  itemName: 
+  itemName: "\u7EFF\u8349"
   itemType: 5
   icon: {fileID: -1113354613, guid: e0bac00ed04595240817d46c132d2443, type: 3}
   description: 
   destroyOnPickup: 1
+  addToInventory: 1
   isKeyItem: 1
+  pickupRange: 2
+  pickupClip: {fileID: 0}
+  pickupVolume: 1
   gunData: {fileID: 0}
   ammoType: 1
   ammoAmount: 10

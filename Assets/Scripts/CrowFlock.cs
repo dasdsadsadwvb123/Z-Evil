@@ -44,7 +44,7 @@ public class CrowFlock : MonoBehaviour
             Spawn();
     }
 
-    /// <summary> 确保本物体上有 AudioSource（loop 循环、不开机自播） </summary>
+    /// <summary> 确保本物体上有 AudioSource（loop 循环、不开机自播、走项目距离听声规则） </summary>
     private void EnsureAudioSource()
     {
         audioSource = GetComponent<AudioSource>();
@@ -54,6 +54,13 @@ public class CrowFlock : MonoBehaviour
         audioSource.loop = true;
         audioSource.clip = flockLoopClip;
         audioSource.volume = volume;
+
+        // ★ 关键：循环音也要"距离听声"，否则默认 spatialBlend=0（2D）会让整个场景都满音量听到（全图异响的根因）。
+        //   对齐 AudibleAudio 的两段式规则：核心圈内全音量、核心圈~最大可闻距离线性渐变、更远完全无声。
+        audioSource.spatialBlend = 1f;                        // 纯 3D 音效：随距离衰减的前提
+        audioSource.rolloffMode = AudioRolloffMode.Linear;    // 线性衰减（与 AudibleAudio 一致）
+        audioSource.minDistance = AudibleAudio.MinDistance;   // 这个圈内全音量
+        audioSource.maxDistance = AudibleAudio.MaxDistance;   // 这个圈外完全听不见
     }
 
     /// <summary> CrowAI 死亡时回调：存活数减一，归零 → 停止循环音（惊群≠死亡，不会误停） </summary>

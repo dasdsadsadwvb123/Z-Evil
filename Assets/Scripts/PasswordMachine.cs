@@ -34,6 +34,7 @@ public class PasswordMachine : MonoBehaviour
 
     private bool solved = false;          // 是否已解开（解开就不再响应）
     private bool isOpen = false;          // 输入界面是否打开
+    private string worldKey;              // 世界进度表钥匙（读档还原"解没解开"）
     private List<int> input = new List<int>(); // 玩家当前输入的数字
 
     private PixelGridMovement player;     // 玩家（自动查找，算距离用）
@@ -55,6 +56,15 @@ public class PasswordMachine : MonoBehaviour
             Debug.LogWarning("[密码机] correctCode 没填，这台机器永远解不开！", gameObject);
         CreatePromptUI();
         CreateMachineUI();
+
+        // 读档自查：世界进度表记录过"这台机解开了" → 恢复成已解 + 补生成钥匙（若还没被捡走）
+        worldKey = WorldState.KeyFor("Password", this);
+        if (WorldState.GetBool(worldKey))
+        {
+            solved = true;
+            HidePrompt();
+            SpawnKeyIfNeeded();
+        }
     }
 
     private void Update()
@@ -192,17 +202,23 @@ public class PasswordMachine : MonoBehaviour
     private void SolveSuccess()
     {
         solved = true;
+        WorldState.Set(worldKey, 1); // 世界进度表登记"密码机已解开"
         CloseMachine();
         HidePrompt();
         if (successSound != null) successSound.Play();
+        SpawnKeyIfNeeded();
+    }
 
+    /// <summary> 在机器旁生成钥匙（解开时 / 读档还原解开态时都走这里） </summary>
+    private void SpawnKeyIfNeeded()
+    {
         if (keyPickupPrefab != null)
         {
             Vector2 spawnPos = (Vector2)transform.position + spawnOffset;
             PickupItem key = Instantiate(keyPickupPrefab, spawnPos, Quaternion.identity);
             // 防刷钥匙：如果这把钥匙以前被捡过（SaveSystem 已记录），PickupItem.Start
             // 会自动 Destroy 这个克隆体——现有防复活机制天然生效，不用我们额外写
-            Debug.Log("[密码机] 密码正确！已生成钥匙：" + key.itemID, gameObject);
+            Debug.Log("[密码机] 已生成钥匙：" + key.itemID, gameObject);
         }
         else
         {
@@ -231,7 +247,7 @@ public class PasswordMachine : MonoBehaviour
         Canvas canvas = promptUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        promptUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(promptUI);
         promptUI.AddComponent<GraphicRaycaster>();
 
         GameObject bg = new GameObject("BG", typeof(RectTransform));
@@ -285,7 +301,7 @@ public class PasswordMachine : MonoBehaviour
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 305;
-        canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasObj);
         canvasObj.AddComponent<GraphicRaycaster>();
 
         // 输入面板总根（全屏容器，开/关只切换它）
@@ -389,7 +405,7 @@ public class PasswordMachine : MonoBehaviour
         Canvas fc = flashCanvas.AddComponent<Canvas>();
         fc.renderMode = RenderMode.ScreenSpaceOverlay;
         fc.sortingOrder = 320;
-        flashCanvas.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(flashCanvas);
         flashCanvas.AddComponent<GraphicRaycaster>();
 
         GameObject flashGO = new GameObject("Flash", typeof(RectTransform));

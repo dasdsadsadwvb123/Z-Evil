@@ -357,7 +357,7 @@ public class IntroTitle : MonoBehaviour
         Canvas canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        canvasGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasGO);
         canvasGO.AddComponent<GraphicRaycaster>();
 
         // 碎片容器（盖住画面用）

@@ -75,7 +75,7 @@ public class AmmoUI : MonoBehaviour
         Canvas canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 150; // 比背包(200)低、比拾取提示(100)高，互不遮挡
-        canvasGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasGO);
         canvasGO.AddComponent<GraphicRaycaster>();
 
         // 2. 半透明黑色底板：让文字在任何背景下都看得清

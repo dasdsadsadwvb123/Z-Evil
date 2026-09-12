@@ -44,6 +44,7 @@ public class DoorLock : MonoBehaviour
     public UnityEvent onUnlocked;
 
     private bool unlocked = false;          // 门是否已开（开过就不再响应）
+    private string worldKey;                // 世界进度表钥匙（读档还原"这扇门开过没"）
     private Inventory inventory;            // 玩家背包（自动查找）
     private PixelGridMovement player;       // 玩家（自动查找，算距离用）
     private GameObject promptUI;            // 交互提示 UI（代码生成，同 Portal 套路）
@@ -59,6 +60,31 @@ public class DoorLock : MonoBehaviour
         doorRenderer = GetComponent<SpriteRenderer>();
         doorCollider = GetComponent<Collider2D>();
         CreatePromptUI();
+
+        // 读档自查：世界进度表记录过"这扇门开过了" → 直接恢复开门结果（不播声、不再触发事件）
+        worldKey = WorldState.KeyFor("Door", this);
+        if (WorldState.GetBool(worldKey))
+            ApplyOpenedState();
+    }
+
+    /// <summary> 恢复"已开门"的最终表现（读档用：换图/渐隐透明 + 关碰撞 + 不再响应交互） </summary>
+    private void ApplyOpenedState()
+    {
+        unlocked = true;
+        HidePrompt();
+        if (doorCollider != null) doorCollider.enabled = false;
+
+        if (openSprite != null && doorRenderer != null)
+        {
+            doorRenderer.sprite = openSprite;
+        }
+        else if (fadeOutSprite && doorRenderer != null)
+        {
+            Color c = doorRenderer.color;
+            c.a = 0f;
+            doorRenderer.color = c;
+            doorRenderer.enabled = false;
+        }
     }
 
     private void Update()
@@ -105,6 +131,9 @@ public class DoorLock : MonoBehaviour
         HidePrompt();
 
         if (unlockSound != null) unlockSound.Play();
+
+        // 世界进度表登记"这扇门开过了"（读档还原用）
+        WorldState.Set(worldKey, 1);
 
         // 开门：先让玩家能穿过去（关掉实体碰撞），再换图/渐隐
         if (doorCollider != null) doorCollider.enabled = false;
@@ -179,7 +208,7 @@ public class DoorLock : MonoBehaviour
         Canvas canvas = promptUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        promptUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(promptUI);
         promptUI.AddComponent<GraphicRaycaster>();
 
         GameObject bg = new GameObject("BG", typeof(RectTransform));

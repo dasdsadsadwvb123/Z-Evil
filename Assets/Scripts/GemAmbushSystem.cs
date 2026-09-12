@@ -48,6 +48,12 @@ public class GemAmbushSystem : MonoBehaviour
     private bool lastHadOrange = false;
     private Inventory playerInventory;     // 玩家背包（懒查找：场景切换自动重找）
 
+    // ---- 世界进度表钥匙（全局，不按场景分：锯子是全局唯一单例） ----
+    private const string KeySawDead = "Ambush_SawDead";
+    private const string KeyRuby = "Ambush_Ruby";
+    private const string KeyPink = "Ambush_Pink";
+    private const string KeyOrange = "Ambush_Orange";
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -65,6 +71,9 @@ public class GemAmbushSystem : MonoBehaviour
         TeleportManager.OnAnyTeleport += OnAnyTeleport;
         // 场景加载：锯子死后尸体不再跟着去新场景（留在死亡场景自然消失）
         SceneManager.sceneLoaded += OnSceneLoaded;
+
+        // 读档/跨场景自查：从世界进度表还原进度（锯子死没死、哪几颗宝石已触发过）
+        RestoreFromWorldState();
     }
 
     private void OnDestroy()
@@ -108,7 +117,16 @@ public class GemAmbushSystem : MonoBehaviour
         if (s == null) return;
         s.RefreshAt(pos);      // 瞬移 + 巡逻中心重置 + 清仇恨回巡逻
         s.ActivateChase();     // 激活追击（永久仇恨）
+        WorldState.Set(AmbushKeyFor(gemName), 1); // 世界进度表登记"这颗宝石已触发过伏击"
         Debug.Log("[宝石伏击] 玩家捡到" + gemName + "！锯子哥刷新到 " + pos + " 并开始追击", gameObject);
+    }
+
+    /// <summary> 宝石名 → 世界进度表钥匙 </summary>
+    private string AmbushKeyFor(string gemName)
+    {
+        if (gemName == "红宝石") return KeyRuby;
+        if (gemName == "粉宝石") return KeyPink;
+        return KeyOrange;
     }
 
     /// <summary> 任意传送阵使用：锯子刷新到大厅固定点，随机游走（不追） </summary>
@@ -152,12 +170,26 @@ public class GemAmbushSystem : MonoBehaviour
     private void OnSawDead()
     {
         sawDead = true;
+        WorldState.Set(KeySawDead, 1); // 世界进度表登记"锯子已死"（读档后也不复活）
         Debug.Log("[宝石伏击] 锯子哥已死——宝石/传送伏击全部永久失效", gameObject);
     }
 
-    /// <summary> 场景加载：锯子已死 → 尸体不再跨场景（销毁，玩家看不到新场景里有尸体） </summary>
+    /// <summary> 场景加载：锯子已死 → 尸体不再跨场景（销毁，玩家看不到新场景里有尸体）；并还原进度表 </summary>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        // 先按世界进度表还原（读档进来后 WorldState 已由 SaveSystem.Awake 恢复）
+        RestoreFromWorldState();
+    }
+
+    /// <summary> 从世界进度表还原伏击进度（Start 和每次切场景时调）：锯子死没死 + 哪几颗宝石已触发过 </summary>
+    private void RestoreFromWorldState()
+    {
+        sawDead = WorldState.GetBool(KeySawDead);
+        rubyTriggered = WorldState.GetBool(KeyRuby);
+        pinkTriggered = WorldState.GetBool(KeyPink);
+        orangeTriggered = WorldState.GetBool(KeyOrange);
+
+        // 已死 → 尸体不再跨场景（销毁）
         if (sawDead && saw != null)
         {
             Destroy(saw.gameObject);

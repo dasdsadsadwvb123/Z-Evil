@@ -117,7 +117,7 @@ public class PickupToast : MonoBehaviour
         Canvas canvas = toastGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 260; // 在背包(200)之上，死亡界面(400)之下
-        toastGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(toastGO);
         toastGO.AddComponent<GraphicRaycaster>();
 
         // 黑色半透明底条（屏幕下方中央）

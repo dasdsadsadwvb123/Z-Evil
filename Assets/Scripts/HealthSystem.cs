@@ -18,6 +18,12 @@ public class HealthSystem : MonoBehaviour
     public float deathAnimationTime = 1.5f;
     public bool reloadSceneOnDeath = false;
 
+    [Header("只能被近战破坏（可打破箱子用）")]
+    [Tooltip("勾上后：枪弹/爆炸等'非近战'伤害一律无效（可打破箱子靠它实现'只能用刀砸开'）")]
+    public bool meleeOnly = false;
+    [Tooltip("被非近战伤害打中时的'弹开'音效（可选，如枪打上去的'叮'）；不拖 = 静音")]
+    public AudioClip meleeBlockClip;
+
     private bool isInvincible = false;
     [HideInInspector] public bool isDead = false;
     private Animator animator;
@@ -35,8 +41,21 @@ public class HealthSystem : MonoBehaviour
         playerMovement = GetComponent<PixelGridMovement>();
     }
 
-    public void TakeDamage(int damage)
+    /// <summary>
+    /// 扣血。fromMelee = 是否来自近战攻击（枪/爆炸等一律 false）。
+    /// 若 meleeOnly = true，则只有近战伤害（fromMelee=true）才生效——可打破箱子"只能用刀砸开"。
+    /// 加了默认参数，现有所有调用（枪/爆炸/敌人攻击/倒计时）都不用改，行为不变。
+    /// </summary>
+    public void TakeDamage(int damage, bool fromMelee = false)
     {
+        // 只能被近战破坏：非近战伤害直接无效（可选播"弹开"音效）
+        if (meleeOnly && !fromMelee)
+        {
+            if (meleeBlockClip != null)
+                AudibleAudio.PlayAt(meleeBlockClip, transform.position);
+            return;
+        }
+
         if (isDead || isInvincible) return;
 
         currentHealth -= damage;

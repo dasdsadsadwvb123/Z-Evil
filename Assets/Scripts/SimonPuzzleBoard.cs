@@ -128,7 +128,7 @@ public class SimonPuzzleBoard : MonoBehaviour
         Canvas canvas = promptUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        promptUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(promptUI);
         promptUI.AddComponent<GraphicRaycaster>();
 
         GameObject bg = new GameObject("BG");

@@ -268,9 +268,10 @@ public class CrowAI : MonoBehaviour
         rb.velocity = Vector2.zero;
         DisturbFlock(); // 枪响/击杀 = 惊群信号
 
-        // 死亡哀叫：PlayClipAtPoint 生成临时音源，尸体销毁也不会打断这声短叫
+        // 死亡哀叫：走项目距离听声（AudibleAudio 在全局临时音源上播，尸体销毁也不打断这声短叫，
+        // 且会按距离衰减——修"一触发就全图异响"）
         if (deathCryClip != null)
-            AudioSource.PlayClipAtPoint(deathCryClip, transform.position);
+            AudibleAudio.PlayAt(deathCryClip, transform.position);
 
         // 通知鸟群：我死了（flock 用它做"全灭停止循环音"的存活计数）
         if (ownerFlock != null)

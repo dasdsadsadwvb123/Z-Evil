@@ -8,6 +8,10 @@ using UnityEngine.UI;
 /// </summary>
 public class SavePoint : MonoBehaviour
 {
+    [Header("存档点 ID（读档时靠它把玩家放回这个存档点；每个存档点唯一）")]
+    [Tooltip("唯一 ID，如 Save_大厅 / Save_档案室。留空会自动用「场景名_物体名」兜底")]
+    public string savePointId = "";
+
     [Header("交互设置")]
     [Tooltip("玩家靠近到这个距离内显示提示")]
     public float interactRange = 1.5f;
@@ -32,6 +36,14 @@ public class SavePoint : MonoBehaviour
         if (saveSystem == null)
             Debug.LogWarning("[存档点] 场景里没有 SaveSystem，请把它挂到玩家身上！", gameObject);
 
+        // savePointId 留空 → 自动用「场景名_物体名」兜底（让新手不用手填也能跑）
+        if (string.IsNullOrEmpty(savePointId))
+        {
+            savePointId = gameObject.scene.name + "_" + gameObject.name;
+            Debug.LogWarning("[存档点] '" + name + "' 的 savePointId 没填，自动兜底为 '" + savePointId
+                + "'。建议在 Inspector 里手填一个唯一 ID（如 Save_大厅），以后重命名物体也不会串档。", gameObject);
+        }
+
         CreatePromptUI();
     }
 
@@ -42,7 +54,7 @@ public class SavePoint : MonoBehaviour
         Canvas canvas = promptUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        promptUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(promptUI);
         promptUI.AddComponent<GraphicRaycaster>();
 
         GameObject bg = new GameObject("BG");
@@ -92,7 +104,7 @@ public class SavePoint : MonoBehaviour
             // F 存档
             if (Input.GetKeyDown(saveKey))
             {
-                saveSystem.SaveGame();
+                saveSystem.SaveGame(this); // 传入自己：读档时玩家会回到这个存档点的坐标
                 ShowSavedFeedback();
             }
 
@@ -113,7 +125,7 @@ public class SavePoint : MonoBehaviour
         Canvas canvas = feedback.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 300;
-        feedback.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(feedback);
         feedback.AddComponent<GraphicRaycaster>();
 
         Text t = feedback.AddComponent<Text>();

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 死亡界面：玩家死亡时弹出"你死了…"，按 R 从存档点继续（读档）。
@@ -61,8 +62,13 @@ public class DeathScreen : MonoBehaviour
         if (Input.GetKeyDown(loadKey))
         {
             bool ok = saveSystem != null && saveSystem.LoadGame();
-            if (!ok && hintText != null)
-                hintText.text = "没有存档！请先到存档点按 F 存档";
+            if (!ok)
+            {
+                // 没有存档 → 回关卡开头（清空世界进度 + 已拾取清单 + 背包快照，加载起始场景）
+                if (hintText != null) hintText.text = "没有存档，从关卡开头重新开始……";
+                if (saveSystem != null) saveSystem.RestartFromBeginning();
+                else SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // 兜底：重开当前场景
+            }
         }
     }
 
@@ -73,7 +79,7 @@ public class DeathScreen : MonoBehaviour
         Canvas canvas = deathUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 400; // 盖在所有 UI 最上面
-        deathUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(deathUI);
         deathUI.AddComponent<GraphicRaycaster>();
 
         // 全屏暗红遮罩

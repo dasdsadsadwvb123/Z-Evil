@@ -133,7 +133,7 @@ public class DiaryReader : MonoBehaviour
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 300;
-        canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasObj);
         canvasObj.AddComponent<GraphicRaycaster>();
 
         // 面板总根：全屏大小、默认隐藏，开/关只切换它

@@ -52,8 +52,6 @@ public class PushableBox : MonoBehaviour
     private bool isMoving = false;
     private float nextPushTime = 0f;
 
-    // ⚠️ 排查用临时日志（修好后可整段删除：搜"[推箱诊断]"删 diagTimer/诊断代码块两处）
-    private float diagTimer = 0f;
     private bool playerNullWarned = false; // player 为 null 只警告一次（防刷屏）
 
     private void Start()
@@ -90,22 +88,15 @@ public class PushableBox : MonoBehaviour
             Debug.Log("[箱子] 摆放位置没对齐格子，已自动吸附到最近整数格 " + snapped + "（选中物体看黄十字 = 格中心）", gameObject);
         boxPos = snapped;
         rb.position = boxPos;
-
-        // ⚠️ 排查用无条件启动日志（关键）：Console 看到这条 = 脚本活着；
-        // 看不到 = 脚本没挂上/没编译成功，后面所有诊断都无从谈起
-        Debug.Log("[推箱诊断] PushableBox 已启动：位置=" + (Vector2)transform.position
-            + (player != null
-                ? "，玩家查找=成功（Tag=Player）"
-                : "，玩家查找=失败 ⚠️ 场景里没有 Tag=Player 的物体（最常见的静默死因）"), gameObject);
     }
 
     private void Update()
     {
-        // ⚠️ 排查用一次性警告：player 查找失败 = 脚本休眠，根因立即锁定（只警告一次防刷屏）
+        // player 查找失败 = 脚本休眠（配置错误提示，长期保留；只警告一次防刷屏）
         if (player == null && !playerNullWarned)
         {
             playerNullWarned = true;
-            Debug.LogWarning("[推箱诊断] player 为 null，脚本休眠中（场景里没有 Tag=Player 的物体）", gameObject);
+            Debug.LogWarning("[箱子] 场景里没有 Tag=Player 的物体，推箱逻辑休眠", gameObject);
         }
 
         if (isMoving || player == null) return;
@@ -154,26 +145,6 @@ public class PushableBox : MonoBehaviour
         {
             float sideHalf = (dirToBox.y == 0f) ? boxCol.bounds.extents.y : boxCol.bounds.extents.x;
             crossTolerance = Mathf.Max(crossToleranceMin, sideHalf * 0.9f);
-        }
-
-        // ---- ⚠️ 排查用临时日志：检测半径内每 0.5 秒一条（修好后整段删掉） ----
-        diagTimer += Time.deltaTime;
-        if (diagTimer >= 0.5f)
-        {
-            diagTimer = 0f;
-            if (dist <= detectRadius)
-            {
-                string verdict = (heldDir == dirToBox && crossAxis <= crossTolerance && dist <= detectRadius)
-                    ? (Time.time < nextPushTime ? "可推（冷却中）" : "可推")
-                    : "不推";
-                Debug.Log("[推箱诊断] 距离=" + dist.ToString("F2")
-                    + " | 检测半径=" + detectRadius.ToString("F2")
-                    + " | 主导轴=" + (Mathf.Abs(toBox.x) >= Mathf.Abs(toBox.y) ? "水平" : "垂直")
-                    + " | 指向箱子=" + dirToBox
-                    + " | 侧偏=" + crossAxis.ToString("F2") + "/" + crossTolerance.ToString("F2")
-                    + " | 按住方向=" + heldDir
-                    + " | 判定=" + verdict, gameObject);
-            }
         }
 
         // ---- 3. 三道判定：距离上限（随箱子尺寸自适应）/ 侧偏容差（随箱子半宽自适应）/ 按住方向指向箱子 ----

@@ -12,14 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a465b46b8054dae48be1c24c54e2ab85, type: 3}
   m_Name: "\u6C99\u9E70"
   m_EditorClassIdentifier: 
-  gunName: "\u624B\u67AA"
-  damage: 100
+  gunName: "\u6C99\u6F20\u4E4B\u9E70"
+  damage: 30
   fireRate: 1.2
-  range: 12
+  range: 15
   icon: {fileID: -2116018990, guid: 0934841bf3b22ff45ae42a5882bcfe9f, type: 3}
   ammoType: 3
   magSize: 7
   maxDurability: 0
+  meleeBoxDurabilityCost: 15
   pelletCount: 1
   spreadAngle: 0
   penetrate: 1

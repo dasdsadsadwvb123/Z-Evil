@@ -16,8 +16,9 @@ using UnityEngine.UI;
 /// - FadeController.Transition(() => { ... })：渐黑 → 执行任意动作（如同场景瞬移）→ 渐亮
 ///
 /// 技术细节：全屏黑 Image 挂 Screen Space Overlay Canvas（sortingOrder 999 压过一切 UI）；
-/// alpha 动画全程用 unscaledTime（不受 timeScale=0 暂停影响）；转场中收到新请求直接立即执行
-///（黑屏中顺便做，无感且功能不丢）。
+/// alpha 动画全程用 unscaledTime（不受 timeScale=0 暂停影响）；
+/// 转场中收到新的传送请求会被【忽略】（不再"立即执行"——否则会和正在跑的转场协程各加载一次场景，
+/// 导致场景被重复加载、spawn 数据被吃空 → 玩家落到默认出生点）。IsTransitioning 供 Portal 做防重入。
 /// </summary>
 public class FadeController : MonoBehaviour
 {
@@ -31,6 +32,9 @@ public class FadeController : MonoBehaviour
 
     private CanvasGroup group;        // 黑屏 Canvas 的透明度/射线开关
     private bool isTransitioning = false;
+
+    /// <summary> 是否正在转场（渐黑/加载/渐亮期间为 true）。传送防重入的唯一锁源：Portal 与 TeleportManager 都看它 </summary>
+    public static bool IsTransitioning { get { return Instance != null && Instance.isTransitioning; } }
 
     /// <summary> 确保转场器存在（没有就自动生成常驻物体，和 AudibleAudio 同款零搭建惯例） </summary>
     private static FadeController Ensure()
@@ -47,26 +51,27 @@ public class FadeController : MonoBehaviour
         return Instance;
     }
 
-    /// <summary> 跨场景传送转场：渐黑 → 加载 sceneName → 渐亮。转场中调用 = 立即直接加载（无感） </summary>
+    /// <summary> 跨场景传送转场：渐黑 → 加载 sceneName → 渐亮。转场中调用 = 忽略（防重复加载，丢弃连按的第二次） </summary>
     public static void TransitionToScene(string sceneName)
     {
         FadeController fc = Ensure();
         if (fc.isTransitioning)
         {
-            // 转场中又收到传送：直接切（屏幕已经黑了，无感且功能不丢）
-            SceneManager.LoadScene(sceneName);
+            // 转场中又收到传送请求：直接忽略，不做任何加载。
+            // （旧实现是"立即 LoadScene"，会让正在跑的转场协程之后又 LoadScene 一次 → 场景重复加载、spawn 数据被吃空）
+            Debug.LogWarning("[转场] 已有转场进行中，忽略重复的跨场景传送请求：" + sceneName);
             return;
         }
         fc.StartCoroutine(fc.TransitionRoutine(sceneName));
     }
 
-    /// <summary> 包裹任意"瞬间动作"（如同场景瞬移）：渐黑 → 执行 → 渐亮。转场中调用 = 立即执行（无感） </summary>
+    /// <summary> 包裹任意"瞬间动作"（如同场景瞬移）：渐黑 → 执行 → 渐亮。转场中调用 = 忽略（丢弃连按的第二次） </summary>
     public static void Transition(System.Action action)
     {
         FadeController fc = Ensure();
         if (fc.isTransitioning)
         {
-            action?.Invoke(); // 黑屏中顺便执行
+            Debug.LogWarning("[转场] 已有转场进行中，忽略重复的同场景传送请求");
             return;
         }
         fc.StartCoroutine(fc.TransitionRoutine(action));

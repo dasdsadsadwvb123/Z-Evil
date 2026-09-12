@@ -171,7 +171,7 @@ public class PasswordPad : MonoBehaviour
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 305;
-        canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasObj);
         canvasObj.AddComponent<GraphicRaycaster>();
 
         // 面板总根（全屏容器，开/关只切换它）
@@ -275,7 +275,7 @@ public class PasswordPad : MonoBehaviour
         Canvas fc = flashCanvas.AddComponent<Canvas>();
         fc.renderMode = RenderMode.ScreenSpaceOverlay;
         fc.sortingOrder = 320;
-        flashCanvas.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(flashCanvas);
         flashCanvas.AddComponent<GraphicRaycaster>();
 
         GameObject flashGO = new GameObject("Flash", typeof(RectTransform));

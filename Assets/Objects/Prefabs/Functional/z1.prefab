@@ -121,7 +121,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5777cc622d326b14687a2d4c075b3571, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 1
+  maxHealth: 12
   currentHealth: 0
   invincibleDuration: 0.5
   deathTriggerName: Death
@@ -144,14 +144,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridSize: 1
   moveSpeed: 2
-  detectionRange: 100
+  detectionRange: 10
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 8
   attackDamage: 1
   attackRange: 1.2
   attackCooldown: 1.5
-  canExplode: 1
+  canExplode: 0
   damageMultiplier: 2
   speedMultiplier: 5
   teleportsToExplode: 4

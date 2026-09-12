@@ -23,11 +23,12 @@ public class PlateSwitchBoard : MonoBehaviour
     private readonly List<PressurePlate> plates = new List<PressurePlate>(); // 自动注册的板
     private bool allPressedPrev = false; // 上一帧是否全部压上（检测"全压→被推开"的边界）
     private bool hasFired = false;       // 是否已经触发过（triggerOnce 用）
+    private string worldKey;             // 世界进度表钥匙（读档还原"机关触发没触发"）
+    private bool restoreChecked = false; // 读档自查只跑一次
 
-    // ⚠️ 排查用无条件启动日志：没有这条 = 总管不存在或物体未激活
-    private void Start()
+    private void Awake()
     {
-        Debug.Log("[开关板] 已启动，等待板子注册…（当前注册 " + plates.Count + " 块）", gameObject);
+        worldKey = WorldState.KeyFor("Plate", this);
     }
 
     /// <summary> 压力板 Start 时自动调用注册自己（不用手动拖） </summary>
@@ -43,6 +44,21 @@ public class PlateSwitchBoard : MonoBehaviour
     private void Update()
     {
         if (plates.Count == 0) return; // 还没板子注册进来
+
+        // 读档自查（只跑一次，等板子都注册完再执行）：
+        // 世界进度表记录过"机关已触发" → 补触发一次下游事件（开门/停倒计时等），保证读档后状态一致。
+        // 注意：压力板的物理位置不进存档（读档后板子回到初始未压状态），这里只还原"机关的结果"。
+        if (!restoreChecked)
+        {
+            restoreChecked = true;
+            if (WorldState.GetBool(worldKey))
+            {
+                onAllActivated.Invoke();
+                hasFired = true;
+                Debug.Log("[开关板] 读档还原：机关处于'已触发'状态，已补触发一次下游事件", gameObject);
+                return; // 本帧到此为止：allPressedPrev 保持 false，下一帧不会误判"被推开"
+            }
+        }
 
         // 全部压上了吗？
         bool all = true;
@@ -60,6 +76,7 @@ public class PlateSwitchBoard : MonoBehaviour
                 Debug.Log("[开关板] " + plates.Count + " 块压力板全部压下！机关触发" + (triggerOnce ? "（一次性）" : ""));
             }
             hasFired = true;
+            WorldState.Set(worldKey, 1); // 世界进度表登记"已触发"
         }
 
         // 边界：全压 → 被推开 = 复位
@@ -67,6 +84,7 @@ public class PlateSwitchBoard : MonoBehaviour
         {
             onDeactivated.Invoke();
             if (!triggerOnce) hasFired = false; // 可重复模式：复位后还能再触发；一次性模式：触发过就不再触发
+            WorldState.Set(worldKey, 0); // 世界进度表登记"已复位"
             Debug.Log("[开关板] 有压力板被推开，机关复位");
         }
 

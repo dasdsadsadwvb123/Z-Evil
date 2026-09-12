@@ -97,7 +97,7 @@ public class SimonPuzzleUI : MonoBehaviour
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 305; // 密码面板同级（250 柜子 / 200 背包之上）
-        canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(canvasObj);
         canvasObj.AddComponent<GraphicRaycaster>();
 
         // 全屏暗底

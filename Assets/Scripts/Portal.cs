@@ -54,10 +54,19 @@ public class Portal : MonoBehaviour
     private Text promptUIText;
     private bool isLocked = false; // 锁定中 = 按 F 不传送（推箱子机关控制，Lock/Unlock 由开关板调）
     private Inventory playerInventory; // 玩家背包（钥匙判定用；按 F 时懒查找，不依赖加载顺序）
+    private string worldKey;           // 世界进度表钥匙（读档还原"解锁没解锁/卡没卡住"）
 
     private void Start()
     {
         isLocked = startLocked; // 默认 false：没接机关的旧传送门行为完全不变
+
+        // 读档自查：世界进度表记录过解锁/卡住状态 → 还原（无记录则维持 Inspector 设置）
+        worldKey = WorldState.KeyFor("Portal", this);
+        if (WorldState.Has(worldKey))
+            isLocked = WorldState.Get(worldKey) == 0; // 1=已解锁 0=锁定
+        if (WorldState.Has(worldKey + "_Stuck"))
+            stuck = WorldState.Get(worldKey + "_Stuck") != 0;
+
         CreatePromptUI();
     }
 
@@ -157,7 +166,6 @@ public class Portal : MonoBehaviour
             if (gemDoor != null && !gemDoor.IsComplete)
             {
                 InventoryUI bag = FindObjectOfType<InventoryUI>();
-                Debug.Log("[宝石门诊断] 宝石门分支进入，背包查找=" + (bag != null ? "成功" : "失败 ⚠️ 身上没有 InventoryUI")); // ⚠️ 排查用临时日志
                 if (bag != null) bag.OpenExternal();
                 return;
             }
@@ -201,6 +209,15 @@ public class Portal : MonoBehaviour
                 return;
             }
 
+            // 传送防重入：一次转场（渐黑/加载/渐亮）还没结束时，忽略新的传送请求。
+            // 根因说明：连按两下 F 时，第二次会落在第一次的转场窗口里——旧逻辑的"转场中立即执行"会让场景被重复加载，
+            // 把 spawn 数据吃空 → 玩家落到地图初始出生点。这里直接丢弃第二次，只保证第一次正常生效。
+            if (TeleportManager.IsTeleporting)
+            {
+                Debug.Log("[传送门] 传送进行中，忽略本次重复请求");
+                return;
+            }
+
            // 自定义 F 文字：填了就以 toast 弹出（传送瞬间玩家出圈会关掉提示框，toast 恒显 2 秒更稳），没填静默传送
            if (!string.IsNullOrEmpty(fMessage))
            {
@@ -237,6 +254,7 @@ public class Portal : MonoBehaviour
     public void Unstick()
     {
         stuck = false;
+        WorldState.Set(worldKey + "_Stuck", 0); // 世界进度表登记"不再卡住"
         Debug.Log("[传送门] " + name + " 不再卡住了");
         if (playerInRange && promptUIText != null) UpdatePromptText(GetEnterPromptText());
     }
@@ -245,6 +263,7 @@ public class Portal : MonoBehaviour
     public void Lock()
     {
         isLocked = true;
+        WorldState.Set(worldKey, 0); // 世界进度表登记"锁定"
         Debug.Log("[传送门] " + name + " 已锁定");
         // 卡住的门保持"门被卡住了"文案（GetEnterPromptText 里 stuck 优先级最高）
         if (playerInRange && promptUIText != null) UpdatePromptText(GetEnterPromptText());
@@ -254,6 +273,7 @@ public class Portal : MonoBehaviour
     public void Unlock()
     {
         isLocked = false;
+        WorldState.Set(worldKey, 1); // 世界进度表登记"已解锁"
         Debug.Log("[传送门] " + name + " 已解锁，可以按 F 出去了！");
         if (playerInRange && promptUIText != null) UpdatePromptText(GetEnterPromptText());
     }

@@ -65,14 +65,9 @@ public class Gun : MonoBehaviour
                 return;
             }
 
-            // 近战武器攻击前消耗 1 点耐久（耐久耗尽就不能再砍了）
-            if (gunData.range <= 1f && !inventory.ConsumeDurability())
-            {
-                // 耐久为 0：刀钝了/坏了，攻击失败
-                DryBlade();
-                return;
-            }
-
+            // 近战武器的耐久消耗改由 MeleeAttack 按"命中的目标"决定
+            //（普通目标 1 / 可打破箱子按 GunData.meleeBoxDurabilityCost），所以这里不再预先扣 1，
+            // 否则砍一下箱子会被扣两次耐久。空挥/普通命中仍是 1，行为不变。
             Fire(gunData);
             if (gunData.range > 1f) playerMovement?.PlayShoot();
             lastFireTime = Time.time;
@@ -90,10 +85,11 @@ public class Gun : MonoBehaviour
         Debug.Log("[弹药] 咔嗒…… 没子弹了！");
     }
 
-    /// <summary> 近战耐久耗尽时触发：武器报废提示 </summary>
+    /// <summary> 近战耐久不足时触发：武器报废/刀太钝的明确提示（Console 警告 + 底部 toast） </summary>
     private void DryBlade()
     {
-        Debug.Log("[耐久] 武器磨损报废了…… 得找把新的了！");
+        Debug.LogWarning("[耐久] 刀已经太钝了…… 耐久不足以再挥砍（砍可打破箱子每下要 15 点）！");
+        if (inventory != null) inventory.OnItemNotice?.Invoke("刀已经太钝了");
     }
 
     /// <summary> 尝试换弹：弹夹没满 + 有备用弹药 才允许开始 </summary>
@@ -124,11 +120,11 @@ public class Gun : MonoBehaviour
     private void Fire(GunData gunData)
     {
 
-        // 近战武器（小刀等）
+        // 近战武器（小刀等）：只有成功挥出（耐久够）才广播亮刀；报废时不亮刀（与旧行为一致）
         if (gunData.range <= 1f)
         {
-            MeleeAttack();
-            OnFired?.Invoke(); // 广播"挥刀了"（GunVisual 亮刀用；近战不亮枪口闪光，由 GunVisual 按 range 区分）
+            if (MeleeAttack(gunData))
+                OnFired?.Invoke(); // 广播"挥刀了"（GunVisual 亮刀用；近战不亮枪口闪光，由 GunVisual 按 range 区分）
             return;
         }
 
@@ -256,11 +252,13 @@ public class Gun : MonoBehaviour
         return result;
     }
 
-    private void MeleeAttack()
+    /// <summary>
+    /// 近战挥砍：先判定命中什么 → 按目标决定耐久消耗（可打破箱子 = 刀箱消耗，默认 15；其他/空挥 = 1）
+    /// → 扣够耐久才出刀光 + 结算伤害。
+    /// 返回 true = 成功挥出（Fire 会广播亮刀）；false = 耐久不足挥不动（已播报废提示，不出刀光、不伤害）。
+    /// </summary>
+    private bool MeleeAttack(GunData gunData)
     {
-        if (playerMovement != null)
-            playerMovement.PlaySlash();
-
         Vector2 dir = playerMovement != null
             ? playerMovement.GetFacingDirection()
             : Vector2.down;
@@ -268,21 +266,41 @@ public class Gun : MonoBehaviour
         Vector2 origin = (Vector2)transform.position + dir * 0.8f;
         Collider2D[] hits = Physics2D.OverlapBoxAll(origin, new Vector2(1.2f, 1.2f), 0f);
 
+        // 1. 先找出命中的目标（不改任何状态）：DestructibleObstacle 优先，其次 HealthSystem
+        DestructibleObstacle obstacle = null;
+        HealthSystem health = null;
         foreach (Collider2D hit in hits)
         {
             if (hit.gameObject == gameObject) continue;
-            DestructibleObstacle obstacle = hit.GetComponentInParent<DestructibleObstacle>();
-            if (obstacle != null)
-            {
-                obstacle.TakeDamage(1);
-                return;
-            }
-            HealthSystem health = hit.GetComponentInParent<HealthSystem>();
-            if (health != null)
-            {
-                health.TakeDamage(1);
-                return;
-            }
+            DestructibleObstacle o = hit.GetComponentInParent<DestructibleObstacle>();
+            if (o != null) { obstacle = o; break; }
+            HealthSystem h = hit.GetComponentInParent<HealthSystem>();
+            if (h != null) { health = h; break; }
         }
+
+        // 2. 决定本次耐久消耗：命中"可打破箱子"（Breakable Container 带 HealthSystem）→ 刀箱消耗；否则 1
+        bool hitBox = (health != null && health.GetComponent<Container>() != null);
+        int cost = 1;
+        if (hitBox)
+            cost = (gunData != null && gunData.meleeBoxDurabilityCost > 0) ? gunData.meleeBoxDurabilityCost : 15;
+
+        // 3. 扣耐久；不够 → 挥不动（报废提示），不出刀光、不造成伤害
+        if (inventory != null && !inventory.ConsumeDurability(cost))
+        {
+            DryBlade();
+            return false;
+        }
+
+        // 4. 出招表现
+        if (playerMovement != null)
+            playerMovement.PlaySlash();
+
+        // 5. 结算伤害：近战来源 = fromMelee:true，才能打动"只能被近战破坏"的箱子
+        if (obstacle != null)
+            obstacle.TakeDamage(1);
+        else if (health != null)
+            health.TakeDamage(1, true);
+
+        return true;
     }
 }

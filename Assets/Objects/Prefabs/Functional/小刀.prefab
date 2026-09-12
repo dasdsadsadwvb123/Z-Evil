@@ -103,7 +103,11 @@ MonoBehaviour:
   icon: {fileID: 1440400181, guid: 90cf7e1cefe003c43833e331ba285243, type: 3}
   description: 
   destroyOnPickup: 1
+  addToInventory: 1
   isKeyItem: 0
+  pickupRange: 2
+  pickupClip: {fileID: 0}
+  pickupVolume: 1
   gunData: {fileID: 11400000, guid: df9d025c7c472bf469d805f4ba97604c, type: 2}
   ammoType: 1
   ammoAmount: 10

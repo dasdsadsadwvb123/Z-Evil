@@ -73,6 +73,8 @@ public class Inventory : MonoBehaviour
 
     public void AddItem(PickupItem pickup)
     {
+        if (pickup == null) return;
+
         // 弹药包不占背包格子，直接加入"备用弹药池"（按弹药类型分池子）
         if (pickup.itemType == ItemType.Ammo)
         {
@@ -80,27 +82,52 @@ public class Inventory : MonoBehaviour
             return;
         }
 
+        // 不可堆叠的"唯一道具"（钥匙/宝石/手册/枪）：同 itemID 已在背包里 → 不重复加
+        // （修"重复物品"bug：防止同一个 Key/Gem 被反复捡进来占一堆格子）
+        if (IsUniqueItemType(pickup.itemType)
+            && !string.IsNullOrEmpty(pickup.itemID)
+            && HasItem(pickup.itemID))
+        {
+            OnItemNotice?.Invoke("已经有【" + GetPickupDisplayName(pickup) + "】了");
+            return;
+        }
+
+        // 按类型只复制"该类型"的字段（修"字段污染"bug：只造该类型需要的字段，
+        // 不再一把梭把 gunData/herbType 全塞进去）
         InventoryItem item = new InventoryItem
         {
             itemID = pickup.itemID,
-            itemName = pickup.itemName,
+            itemName = GetPickupDisplayName(pickup), // 空名字兜底：itemName → itemID → "未知道具"
             itemType = pickup.itemType,
             icon = pickup.icon,
-            description = pickup.description,
-            gunData = pickup.gunData,
-            herbType = pickup.herbType,
-            healAmount = pickup.healAmount
+            description = pickup.description
         };
 
-        // 如果是武器：把 GunData 的上限复制到"运行时"字段，拾取时弹夹是满的
-        if (item.gunData != null)
+        switch (pickup.itemType)
         {
-            item.magSize = item.gunData.magSize;
-            item.currentAmmo = item.magSize;
-            item.maxDurability = item.gunData.maxDurability;
-            item.currentDurability = item.maxDurability;
-            Debug.Log("[武器] 拾取 " + item.itemName + "，弹夹 " + item.currentAmmo + "/" + item.magSize
-                + "，耐久 " + item.currentDurability + "/" + item.maxDurability);
+            case ItemType.Gun:
+                // 武器：把 GunData 的上限复制到"运行时"字段，拾取时弹夹是满的
+                item.gunData = pickup.gunData;
+                if (item.gunData != null)
+                {
+                    item.magSize = item.gunData.magSize;
+                    item.currentAmmo = item.magSize;
+                    item.maxDurability = item.gunData.maxDurability;
+                    item.currentDurability = item.maxDurability;
+                    Debug.Log("[武器] 拾取 " + item.itemName + "，弹夹 " + item.currentAmmo + "/" + item.magSize
+                        + "，耐久 " + item.currentDurability + "/" + item.maxDurability);
+                }
+                break;
+
+            case ItemType.Herb:
+                // 草药：只复制草药字段
+                item.herbType = pickup.herbType;
+                item.healAmount = pickup.healAmount;
+                break;
+
+            default:
+                // Key / Gem / Manual：没有附加字段，什么都不复制
+                break;
         }
 
         items.Add(item);
@@ -109,6 +136,22 @@ public class Inventory : MonoBehaviour
         SaveState();
         onChanged?.Invoke();
         OnItemNotice?.Invoke("获得 " + item.itemName); // 拾取提示
+    }
+
+    /// <summary> 是不是"不可堆叠的唯一道具"（同 ID 不允许拿第二份）：钥匙/宝石/手册/枪 </summary>
+    private bool IsUniqueItemType(ItemType type)
+    {
+        return type == ItemType.Key || type == ItemType.Gem
+            || type == ItemType.Manual || type == ItemType.Gun;
+    }
+
+    /// <summary> 拾取物的显示名兜底：itemName 空 → 用 itemID → 再不行用"未知道具" </summary>
+    private string GetPickupDisplayName(PickupItem pickup)
+    {
+        if (pickup == null) return "未知道具";
+        if (!string.IsNullOrEmpty(pickup.itemName)) return pickup.itemName;
+        if (!string.IsNullOrEmpty(pickup.itemID)) return pickup.itemID;
+        return "未知道具";
     }
 
     // ======== 备用弹药池（拾取弹药包后存入这里，换弹时转入弹夹） ========
@@ -206,15 +249,17 @@ public class Inventory : MonoBehaviour
         return true;
     }
 
-    /// <summary> 近战武器消耗 1 点耐久。返回 false 表示耐久耗尽，不能攻击。
-    /// maxDurability <= 0 表示无限耐久，永远返回 true（不消耗） </summary>
-    public bool ConsumeDurability()
+    /// <summary> 近战武器消耗 amount 点耐久（默认 1 → 现有调用零漂移）。
+    /// maxDurability <= 0 表示无限耐久，永远返回 true（不消耗）。
+    /// 耐久不足（< amount）→ 一点不扣、返回 false（all-or-nothing，防扣成负数）。 </summary>
+    public bool ConsumeDurability(int amount = 1)
     {
         InventoryItem equipped = GetEquippedItem();
         if (equipped == null || equipped.gunData == null) return false;
+        if (amount < 1) amount = 1;
         if (equipped.maxDurability <= 0) return true;      // 无限耐久，随便打
-        if (equipped.currentDurability <= 0) return false; // 耐久耗尽
-        equipped.currentDurability--;
+        if (equipped.currentDurability < amount) return false; // 不够扣 → 不扣、返回 false
+        equipped.currentDurability -= amount;
         onChanged?.Invoke();
         return true;
     }

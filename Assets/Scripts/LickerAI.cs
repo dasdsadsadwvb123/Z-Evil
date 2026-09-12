@@ -47,6 +47,14 @@ public class LickerAI : MonoBehaviour
     [Tooltip("守卫半径：追击时跑不出出生点周围这个圈，出圈/玩家出圈就放弃回位（不跨场景追）")]
     public float guardRadius = 5f;
 
+    [Header("追击牵引 & 边界（防跑出地图外）")]
+    [Tooltip("牵引硬上限：出生点周围超过这个距离的格子一律不作数（比守卫半径更外层的兜底，防巡逻/追击跑出地图；建议 12~15）")]
+    public float leashRange = 12f;
+    [Tooltip("勾上 = 用下面矩形硬约束可行走范围（地图没有边界墙时的安全网）")]
+    public bool useBounds = false;
+    public Vector2 boundsMin = Vector2.zero;
+    public Vector2 boundsMax = Vector2.zero;
+
     [Header("舌头突刺攻击")]
     [Tooltip("进入这个距离开始舌头突刺（比电锯哥 0.9 远）")]
     public float attackRange = 1.6f;
@@ -90,6 +98,7 @@ public class LickerAI : MonoBehaviour
     private Transform player;
     private HealthSystem playerHealth;
     private AudioSource audioSource;
+    private string deathKey;              // 世界进度表钥匙（读档还原"这只死没死"）
 
     private State state = State.Patrol;
     private bool isAttacking = false;
@@ -157,6 +166,12 @@ public class LickerAI : MonoBehaviour
         audioSource.clip = lickerLoopClip;
         audioSource.volume = loopVolume;
         audioSource.pitch = 1f;
+        // ★ 循环音也要"距离听声"（原缺失 → 默认 2D 会全图满音量）：对齐 AudibleAudio 两段式规则。
+        //   （本音源兼播 alert/attack 的 PlayOneShot，配了 3D 后它们也一起按距离衰减，符合"走近才听清"）
+        audioSource.spatialBlend = 1f;
+        audioSource.rolloffMode = AudioRolloffMode.Linear;
+        audioSource.minDistance = AudibleAudio.MinDistance;
+        audioSource.maxDistance = AudibleAudio.MaxDistance;
         if (lickerLoopClip != null) audioSource.Play();
 
         homePos = rb.position;
@@ -165,6 +180,27 @@ public class LickerAI : MonoBehaviour
         SnapToGrid();
 
         SetIdleAnim();
+
+        // 读档自查：世界进度表记录过"这只已死" → 直接趴尸，不再复活
+        deathKey = WorldState.KeyFor("Dead", this);
+        if (WorldState.GetBool(deathKey))
+            ApplyDeadState();
+    }
+
+    /// <summary> 恢复"已死"状态（读档用）：冻结 AI + 停声 + 关碰撞 + 播死亡姿态 </summary>
+    private void ApplyDeadState()
+    {
+        if (myHealth != null) myHealth.isDead = true;
+        if (audioSource != null) audioSource.Stop();
+        Collider2D col = GetComponent<Collider2D>();
+        if (col != null) col.enabled = false;
+        if (sr != null) sr.sortingOrder -= 5;
+        if (animator != null)
+        {
+            int h = Animator.StringToHash("death");
+            if (animator.HasState(0, h)) animator.CrossFade(h, 0.05f, 0, 0f);
+        }
+        Debug.Log("[舔食者] 读档还原：已处于死亡状态", gameObject);
     }
 
     private void OnDestroy()
@@ -431,13 +467,34 @@ public class LickerAI : MonoBehaviour
 
     private bool IsWalkable(Vector2 pos)
     {
-        if (Physics2D.OverlapBox(pos, Vector2.one * gridSize * 0.9f, 0f, obstacleLayer) != null)
+        // 吸附整数格
+        pos.x = Mathf.Round(pos.x / gridSize) * gridSize;
+        pos.y = Mathf.Round(pos.y / gridSize) * gridSize;
+
+        // ① 地图边界（可选安全网）：走出矩形 = 不可走
+        if (useBounds && (pos.x < boundsMin.x || pos.x > boundsMax.x || pos.y < boundsMin.y || pos.y > boundsMax.y))
             return false;
+
+        // ② 牵引硬上限：离出生点超过 leashRange 的格一律不作数（防跑图外，巡逻/追击通用）
+        if (Vector2.Distance(pos, homePos) > leashRange)
+            return false;
+
+        // ③ 终点格：0.9 格盒（排除自身/子物体碰撞体）
+        if (ObstacleQuery.BlockedAt(pos, Vector2.one * gridSize * 0.9f, transform, obstacleLayer))
+            return false;
+
+        // ④ 起点→终点中心连线：薄墙也不放过（射线同 obstacleLayer）
         Vector2 from = targetGridPos;
         Vector2 toDir = (pos - from).normalized;
         float toDist = Vector2.Distance(from, pos);
-        if (Physics2D.Raycast(from, toDir, toDist, obstacleLayer).collider != null)
+        if (ObstacleQuery.RaycastBlocked(from, toDir, toDist, transform, obstacleLayer))
             return false;
+
+        // ⑤ 半格中点再补一盒（防薄墙夹缝漏检，同暴君 BlockedAt 套路）
+        Vector2 mid = (from + pos) * 0.5f;
+        if (ObstacleQuery.BlockedAt(mid, Vector2.one * gridSize * 0.6f, transform, obstacleLayer))
+            return false;
+
         return true;
     }
 
@@ -473,8 +530,8 @@ public class LickerAI : MonoBehaviour
         while (groundPos != (Vector2)lungeEnd)
         {
             Vector2 next = Vector2.MoveTowards(groundPos, lungeEnd, lungeSpeed * Time.deltaTime);
-            // 撞墙截停：舌头不穿墙
-            if (Physics2D.OverlapBox(next, Vector2.one * gridSize * 0.6f, 0f, obstacleLayer) != null)
+            // 撞墙截停：舌头不穿墙（排除自身，防自己挡自己）
+            if (ObstacleQuery.BlockedAt(next, Vector2.one * gridSize * 0.6f, transform, obstacleLayer))
                 break;
             groundPos = next;
             rb.position = groundPos; // 突刺在地面进行
@@ -532,6 +589,8 @@ public class LickerAI : MonoBehaviour
     {
         StopAllCoroutines(); // 在途的舌头突刺/闪白全部掐掉，死了不会打完手里这套
 
+        WorldState.Set(deathKey, 1); // 世界进度表登记"这只已死"
+
         if (audioSource != null) audioSource.Stop(); // 涎液循环声熄火
 
         Collider2D col = GetComponent<Collider2D>();
@@ -540,7 +599,7 @@ public class LickerAI : MonoBehaviour
         if (sr != null) sr.sortingOrder -= 5; // 压低排序：尸体垫在活物脚下
 
         if (deathCryClip != null)
-            AudioSource.PlayClipAtPoint(deathCryClip, transform.position); // 临时音源，销毁尸体也会把哀叫播完
+            AudibleAudio.PlayAt(deathCryClip, transform.position); // 走项目距离听声：全局临时音源，尸体销毁也会把哀叫播完，且按距离衰减
 
         StartCoroutine(DeathRoutine());
     }
@@ -697,5 +756,14 @@ public class LickerAI : MonoBehaviour
         Gizmos.DrawWireSphere(center, aggroRange);     // 黄 = 听声范围
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(center, guardRadius);    // 红 = 守卫半径（不追出圈）
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(center, leashRange);     // 青 = 牵引硬上限（比守卫半径更外层的兜底）
+        if (useBounds)
+        {
+            Gizmos.color = new Color(1f, 0.5f, 0f);
+            Vector3 c = new Vector3((boundsMin.x + boundsMax.x) * 0.5f, (boundsMin.y + boundsMax.y) * 0.5f, 0f);
+            Vector3 s = new Vector3(boundsMax.x - boundsMin.x, boundsMax.y - boundsMin.y, 0f);
+            Gizmos.DrawWireCube(c, s);                 // 橙框 = 可行走矩形（若启用）
+        }
     }
 }

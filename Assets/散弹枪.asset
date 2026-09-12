@@ -13,13 +13,14 @@ MonoBehaviour:
   m_Name: "\u6563\u5F39\u67AA"
   m_EditorClassIdentifier: 
   gunName: "\u9730\u5F39\u67AA"
-  damage: 4
+  damage: 10
   fireRate: 0.9
-  range: 5
+  range: 6
   icon: {fileID: 726561863, guid: 0934841bf3b22ff45ae42a5882bcfe9f, type: 3}
   ammoType: 2
   magSize: 5
   maxDurability: 0
+  meleeBoxDurabilityCost: 15
   pelletCount: 5
   spreadAngle: 90
   penetrate: 1

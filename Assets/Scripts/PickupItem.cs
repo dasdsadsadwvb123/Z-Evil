@@ -28,6 +28,11 @@ public class InventoryItem
     // ======== 草药系统：运行时状态 ========
     public HerbType herbType;     // 草药类型（绿/红/混合）
     public int healAmount;        // 使用后恢复多少生命（从 PickupItem 复制过来）
+
+    // ======== 弹药系统：箱内物品用 ========
+    // 供"箱子/可打碎箱子"里的弹药条目携带弹药类型和数量（取出时直接进备用弹药池，不占背包格）
+    public AmmoType ammoType = AmmoType.Pistol;
+    public int ammoAmount = 10;
 }
 
 public class PickupItem : MonoBehaviour
@@ -40,9 +45,21 @@ public class PickupItem : MonoBehaviour
     [TextArea] public string description = "";
     public bool destroyOnPickup = true;
 
+    [Header("背包")]
+    [Tooltip("拾取后是否放进 TAB 背包。纸条不用管——身上有 NotePaper 会自动不进背包、只登记到纸条收集表")]
+    public bool addToInventory = true;
+
     [Header("高亮引导")]
     [Tooltip("勾选后 = 关键物品：玩家靠近时会金色闪烁提示（需在物体上挂 ItemHighlight 组件）")]
     public bool isKeyItem = false;
+
+    [Header("拾取范围 & 音效（每件物品独立可调）")]
+    [Tooltip("这件物品自己的可拾取范围（站多近能捡）；默认 1.5 = 与玩家全局范围一致")]
+    public float pickupRange = 1.5f;
+    [Tooltip("拾取这件物品时的音效（可选；不拖则用玩家上的默认拾取音效）")]
+    public AudioClip pickupClip;
+    [Tooltip("拾取音效音量")]
+    public float pickupVolume = 1f;
 
     [Header("如果是枪")]
     public GunData gunData;

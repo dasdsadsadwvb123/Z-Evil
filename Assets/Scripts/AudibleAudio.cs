@@ -34,6 +34,12 @@ public class AudibleAudio : MonoBehaviour
     /// <summary> 全局单例：懒加载，第一次播声音时自动生成，跨场景常驻 </summary>
     private static AudibleAudio instance;
 
+    /// <summary> 全局"全音量核心圈"半径（供需要自配 3D 衰减的循环音源读取，保证与项目听声手感统一） </summary>
+    public static float MinDistance { get { EnsureSettings(); return instance.minDistance; } }
+
+    /// <summary> 全局"最大可闻距离"（同上，供循环音源对齐项目的两段式听声规则） </summary>
+    public static float MaxDistance { get { EnsureSettings(); return instance.maxDistance; } }
+
     /// <summary> 确保设置物体存在（没有就自动建一个，不用手动搭建） </summary>
     private static void EnsureSettings()
     {

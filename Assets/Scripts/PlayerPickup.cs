@@ -13,6 +13,10 @@ public class PlayerPickup : MonoBehaviour
     [Header("提示文字")]
     public string promptText = "按F拾取";
 
+    [Header("拾取音效")]
+    [Tooltip("默认拾取音效（物品自己没配 pickupClip 时用它；不拖 = 静音）")]
+    public AudioClip defaultPickupClip;
+
     private Inventory inventory;
     private PickupItem nearestItem;
     private GameObject promptUI;
@@ -32,7 +36,7 @@ public class PlayerPickup : MonoBehaviour
         Canvas canvas = promptUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
-        promptUI.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UIScale.Setup(promptUI);
         promptUI.AddComponent<GraphicRaycaster>();
 
         GameObject bg = new GameObject("BG");
@@ -79,15 +83,31 @@ public class PlayerPickup : MonoBehaviour
 
             if (Input.GetKeyDown(interactKey))
             {
-               inventory.AddItem(nearestItem);
+                // 拾取音效：物品专属音效优先，否则用玩家默认音效（两者都没拖 = 静音，不报错）；走距离听声惯例
+                AudioClip clip = nearestItem.pickupClip != null ? nearestItem.pickupClip : defaultPickupClip;
+                AudibleAudio.PlayAt(clip, nearestItem.transform.position, nearestItem.pickupVolume);
+
+                // 纸条：不进背包，登记到纸条收集表（按拾取逐条，互不覆盖）——修"只显示最后一张"
+                NotePaper note = nearestItem.GetComponent<NotePaper>();
+                if (note != null)
+                {
+                    note.CollectSelf();
+                    inventory.OnItemNotice?.Invoke(note.pickupMessage); // 底部提示（默认"获得：一张纸条"）
+                }
+                // 普通物品：按 addToInventory 决定是否放进 TAB 背包
+                else if (nearestItem.addToInventory)
+                {
+                    inventory.AddItem(nearestItem);
+                }
+
                 playerMovement?.PlayFlash();
-               if (nearestItem.destroyOnPickup)
-               {
+                if (nearestItem.destroyOnPickup)
+                {
                     // 记录"已拾取"，防止场景重载后物品复活（防刷物品）。
                     // 没填 itemID 时用物体名兜底（防止弹药包之类无限刷）
                     SaveSystem.CollectItem(nearestItem.itemID, nearestItem.gameObject.name);
                     Destroy(nearestItem.gameObject);
-               }
+                }
             }
         }
         else
@@ -99,7 +119,7 @@ public class PlayerPickup : MonoBehaviour
     private PickupItem FindNearestItem()
     {
         PickupItem closest = null;
-        float minDist = pickupRange;
+        float bestDist = float.MaxValue;
 
         // 按距离检测场景中所有存活的 PickupItem
         PickupItem[] all = FindObjectsOfType<PickupItem>();
@@ -107,9 +127,16 @@ public class PlayerPickup : MonoBehaviour
         {
             if (!p.gameObject.activeInHierarchy) continue;
             float dist = Vector2.Distance(transform.position, p.transform.position);
-            if (dist < minDist)
+
+            // 初筛：玩家基准范围 与 物品自身范围 取大者（物品把范围调大时，不会被玩家范围提前挡掉）
+            float broad = Mathf.Max(pickupRange, p.pickupRange);
+            if (dist > broad) continue;
+            // 精确判定：以物品自身范围为准（<= 物品 pickupRange 才算在范围内）→ 范围外不提示、不能拾取
+            if (dist > p.pickupRange) continue;
+
+            if (dist < bestDist)
             {
-                minDist = dist;
+                bestDist = dist;
                 closest = p;
             }
         }

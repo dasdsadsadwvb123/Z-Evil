@@ -44,6 +44,12 @@ public class Container : MonoBehaviour
         public HerbType herbType = HerbType.Green;
         [Tooltip("草药回血量")]
         public int healAmount = 1;
+
+        [Header("如果是弹药（itemType 选 Ammo 时才用；取出直接进备用弹药池，不占背包格）")]
+        [Tooltip("这包子弹属于哪种弹药（每把枪只能用自己的弹药）")]
+        public AmmoType ammoType = AmmoType.Pistol;
+        [Tooltip("取出后加入备用弹药池的数量")]
+        public int ammoAmount = 10;
     }
 
     [Header("箱子类型")]
@@ -81,6 +87,8 @@ public class Container : MonoBehaviour
     [Header("可破坏式专属")]
     [Tooltip("血量（只有 Breakable 且身上没挂 HealthSystem 时，自动补的这个值才生效）")]
     public int breakableHealth = 4;
+    [Tooltip("只能被刀砸开（枪打不掉血）。只对 Breakable 类型生效；Cabinet/密码箱完全不受影响")]
+    public bool meleeOnlyBreak = true;
 
     /// <summary> 箱子当前内容物（运行时列表；存的是完整物品条目，弹药/耐久状态原样保留） </summary>
     [HideInInspector] public List<InventoryItem> contents = new List<InventoryItem>();
@@ -95,21 +103,33 @@ public class Container : MonoBehaviour
     private HealthSystem myHealth;
     private GameObject promptUI;
     private Text promptTextUI;         // 提示文字引用（密码锁动态切"输入密码/打开"文案）
+    private string baseKey;            // 世界进度表钥匙前缀（读档还原容器状态用）
 
     private void Start()
     {
         sr = GetComponent<SpriteRenderer>();
+        baseKey = WorldState.KeyFor("Container", this);
 
         // 初始物品 → 内容物（count 个 = count 条，和玩家背包"每格一件"规则一致）
+        // 读档还原：每种 itemID 记录过"取走几个"，就从初始内容里扣掉几个（先取先扣）
         if (starterItems != null)
         {
             foreach (StarterEntry e in starterItems)
             {
                 if (e == null || string.IsNullOrEmpty(e.itemID)) continue;
                 int n = Mathf.Max(1, e.count);
-                for (int i = 0; i < n; i++) contents.Add(CreateItem(e));
+                int taken = WorldState.Get(baseKey + "_Taken_" + e.itemID, 0);
+                for (int i = 0; i < n; i++)
+                {
+                    if (taken > 0) { taken--; continue; } // 这个已经取走过，不再生成
+                    contents.Add(CreateItem(e));
+                }
             }
         }
+
+        // 密码已解过 → 恢复"本次游戏内不用再输密码"
+        if (requirePassword && WorldState.GetBool(baseKey + "_Pw"))
+            unlocked = true;
 
         // 找玩家（提示 UI + 距离检测用）
         GameObject p = GameObject.FindGameObjectWithTag("Player");
@@ -118,6 +138,21 @@ public class Container : MonoBehaviour
 
         if (type == ContainerType.Breakable) SetupBreakable();
         else CreatePromptUI(); // 只有 Cabinet（衣柜式）需要"按F打开"提示；Breakable 没有开盖交互
+
+        // 已破坏 → 恢复废墟状态（放最后：SetupBreakable 已把 HealthSystem/碰撞体备好，这里再改）
+        if (WorldState.GetBool(baseKey + "_Broken"))
+            ApplyBrokenState();
+    }
+
+    /// <summary> 恢复"已打碎"的废墟状态（读档用：换废墟图 + 清空内容 + 关碰撞 + 不再响应） </summary>
+    private void ApplyBrokenState()
+    {
+        IsBroken = true;
+        contents.Clear();
+        if (sr != null && brokenSprite != null) sr.sprite = brokenSprite;
+        BoxCollider2D col = GetComponent<BoxCollider2D>();
+        if (col != null) col.enabled = false;
+        if (promptUI != null) promptUI.SetActive(false);
     }
 
     /// <summary> 把 Inspector 条目转成运行时物品条目（枪会自动满弹满耐久，和拾取规则一致） </summary>
@@ -132,7 +167,9 @@ public class Container : MonoBehaviour
             description = e.description,
             gunData = e.gunData,
             herbType = e.herbType,
-            healAmount = e.healAmount
+            healAmount = e.healAmount,
+            ammoType = e.ammoType,      // 弹药类型（箱内取子弹时入备用弹药池用）
+            ammoAmount = e.ammoAmount   // 弹药数量
         };
         if (item.gunData != null)
         {
@@ -156,6 +193,7 @@ public class Container : MonoBehaviour
         myHealth.currentHealth = myHealth.maxHealth;
         myHealth.destroyOnDeath = false; // 死亡生命周期归本脚本管（不销毁，换废墟图）
         myHealth.deathTriggerName = "";  // 箱子没有动画
+        myHealth.meleeOnly = meleeOnlyBreak; // 只能被刀砸开（枪打不掉血）；勾选状态直写，取消勾选也能恢复
         myHealth.OnDeath += Break;
 
         // 破坏式箱子必须是实体碰撞体（子弹/刀的判定要能碰到它）
@@ -210,6 +248,7 @@ public class Container : MonoBehaviour
     private void OnPasswordSuccess()
     {
         unlocked = true;
+        WorldState.Set(baseKey + "_Pw", 1); // 世界进度表登记"密码已解"
         Debug.Log("[箱子] " + name + " 密码正确，已解锁！本次游戏内不再需要输密码", gameObject);
         if (successClip != null) AudibleAudio.PlayAt(successClip, transform.position); // 密码正确音效
         AudibleAudio.PlayAt(openClip, transform.position);
@@ -230,6 +269,12 @@ public class Container : MonoBehaviour
         if (index < 0 || index >= contents.Count) return null;
         InventoryItem item = contents[index];
         contents.RemoveAt(index);
+        // 世界进度表登记"这种物品取走了 1 个"（读档还原容器内容用）
+        if (!string.IsNullOrEmpty(item.itemID))
+        {
+            string k = baseKey + "_Taken_" + item.itemID;
+            WorldState.Set(k, WorldState.Get(k, 0) + 1);
+        }
         AudibleAudio.PlayAt(takeClip, transform.position);
         return item;
     }
@@ -240,6 +285,7 @@ public class Container : MonoBehaviour
     {
         if (IsBroken) return;
         IsBroken = true;
+        WorldState.Set(baseKey + "_Broken", 1); // 世界进度表登记"已打碎"
 
         Debug.Log("[箱子] " + name + " 被打碎了！掉落 " + contents.Count + " 件物品", gameObject);
 
@@ -284,6 +330,8 @@ public class Container : MonoBehaviour
         drop.gunData = item.gunData;
         drop.herbType = item.herbType;
         drop.healAmount = item.healAmount;
+        drop.ammoType = item.ammoType;     // 弹药类型（打碎箱子掉出来的子弹也要能正确入池）
+        drop.ammoAmount = item.ammoAmount; // 弹药数量
         drop.destroyOnPickup = true; // 捡走就消失（防反复刷）
     }
 
