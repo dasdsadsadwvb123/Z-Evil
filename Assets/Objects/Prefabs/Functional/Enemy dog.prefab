@@ -135,6 +135,8 @@ MonoBehaviour:
   destroyOnDeath: 0
   deathAnimationTime: 1.5
   reloadSceneOnDeath: 0
+  meleeOnly: 0
+  meleeBlockClip: {fileID: 0}
   isDead: 0
 --- !u!114 &2967512503422355470
 MonoBehaviour:
@@ -149,7 +151,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gridSize: 1
-  moveSpeed: 6
+  moveSpeed: 5
   detectionRange: 12
   obstacleLayer:
     serializedVersion: 2

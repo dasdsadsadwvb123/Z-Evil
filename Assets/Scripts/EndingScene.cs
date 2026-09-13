@@ -12,7 +12,7 @@ using Cinemachine; // 相机接管（Cinemachine 2.10.7，和 CarDriveIn.cs 同�
 ///
 /// 设计：暴君死后「其实游戏就已经结束了」，后半场纯属过场——【玩家不再出场】，
 /// 由本脚本接管相机（Cinemachine）直接把镜头切/推到罐子房让玩家看到罐子闪红，
-/// 再硬切黑屏 → 两幕标题 → 滚动字幕 → 回 Intro。
+/// 再硬切黑屏 → 两幕标题 → 滚动字幕 → 显示"点击任意位置退出游戏"提示 → 等点击 → 退出游戏。
 ///
 /// 演出顺序：
 ///   0. 立刻接管相机看向 stageTarget（罐子房中心；可瞬时切或自然跟）
@@ -20,7 +20,9 @@ using Cinemachine; // 相机接管（Cinemachine 2.10.7，和 CarDriveIn.cs 同�
 ///   2. 闪红结束 → 电影的"硬切/直切"：黑幕【瞬间】全黑（不是渐变，要"啪"一下）+ 一声重音
 ///   3. 黑屏上依次出现两幕标题：第一幕淡入→停→淡出；第二幕淡入→停→淡出
 ///   4. 黑屏白字向上滚的电影式落幕：整段字幕由一个 Text 从屏幕下方往上滚（第一行「感谢游玩」最大）
-///   5. 滚完 → 停 endHoldSeconds 秒 → SceneManager.LoadScene(returnSceneName) 回到一开始的界面（默认 Intro）
+///   5. 滚完 → 停 Mathf.Max(endHoldSeconds, quitPromptDelay) 秒 →
+///      ✅ 勾 waitClickToQuit：显示呼吸闪烁的提示，等玩家点击任意位置 → 退出游戏（推荐）
+///      ⬜ 不勾 waitClickToQuit：SceneManager.LoadScene(returnSceneName) 回到一开始的界面（默认 Intro，旧行为）
 ///
 /// 两种模式：
 ///   ✅ 罐子房是【独立 Scene】：勾 autoPlayOnStart（场景一进来就自动演，留 startDelay 给玩家看清房间）。
@@ -78,8 +80,18 @@ public class EndingScene : MonoBehaviour
     public float scrollSpeed = 90f;
     [Tooltip("滚完之后停多久再回标题（秒）")]
     public float endHoldSeconds = 1.5f;
-    [Tooltip("回哪个场景（一开始的界面）")]
+    [Tooltip("回哪个场景（一开始的界面）；只在【不勾】Wait Click To Quit 时才会用到")]
     public string returnSceneName = "Intro";
+
+    [Header("落幕结束后的退出提示（照开场 IntroTitle 的形式）")]
+    [Tooltip("勾上 = 落幕滚完后显示提示文字、等玩家点击任意位置再退出游戏（推荐）。不勾 = 沿用旧行为：自动加载 Return Scene Name 回开场界面")]
+    public bool waitClickToQuit = true;
+    [Tooltip("提示文字（白字、居中、透明度呼吸闪烁；留空则不显示文字，但依然等点击）")]
+    public string quitPrompt = "点击任意位置退出游戏";
+    [Tooltip("提示文字呼吸闪烁速度（和开场 IntroTitle 的 promptPulseSpeed 同款手感；数值越大闪得越快）")]
+    public float quitPromptPulseSpeed = 2.5f;
+    [Tooltip("落幕滚完后再等多久才显示提示文字（秒）")]
+    public float quitPromptDelay = 0.5f;
 
     // ============================ 运行时缓存 ============================
 
@@ -90,6 +102,7 @@ public class EndingScene : MonoBehaviour
     private Text titleLabel;                 // 标题文字（两幕复用同一个）
     private CanvasGroup titleGroup;          // 标题整组透明度（连描边/投影一起淡）
     private Text creditsLabel;               // 滚动字幕
+    private Text quitPromptLabel;            // "点击任意位置退出游戏"提示（落幕滚完后才显示）
     private bool playing = false;            // 防重入
 
     private Transform originalFollow;        // 接管前相机原本跟谁（本项目结束时不必恢复，仅作记录/防呆）
@@ -166,14 +179,24 @@ public class EndingScene : MonoBehaviour
         // ── 第 5 步：黑屏白字向上滚（电影式落幕） ──
         yield return ScrollCredits();
 
-        // ── 第 6 步：停一会儿再回标题 ──
-        yield return new WaitForSecondsRealtime(endHoldSeconds);
+        // ── 第 6 步：等一会儿（显示退出提示前的缓冲） ──
+        // 两个值取大的：既保留老的 endHoldSeconds 手感，又满足新加的 quitPromptDelay
+        yield return new WaitForSecondsRealtime(Mathf.Max(endHoldSeconds, quitPromptDelay));
 
-        // ── 第 7 步：回到一开始的界面 ──
-        if (!string.IsNullOrEmpty(returnSceneName))
-            SceneManager.LoadScene(returnSceneName);
+        // ── 第 7 步：等玩家点击任意位置 → 退出游戏（推荐）；不勾则沿用旧行为回开场界面 ──
+        if (waitClickToQuit)
+        {
+            yield return WaitClickToQuit(); // 显示呼吸闪烁的提示，等到鼠标左键/触摸按下
+            QuitGame();                     // 立刻退出游戏（编辑器/打包分支内部分开处理）
+        }
         else
-            Debug.LogWarning("[结局演出] returnSceneName 为空，无法回到标题场景", this);
+        {
+            // 旧行为：回到一开始的界面
+            if (!string.IsNullOrEmpty(returnSceneName))
+                SceneManager.LoadScene(returnSceneName);
+            else
+                Debug.LogWarning("[结局演出] returnSceneName 为空，无法回到标题场景", this);
+        }
     }
 
     // ============================ 各阶段实现 ============================
@@ -275,6 +298,53 @@ public class EndingScene : MonoBehaviour
             rt.anchoredPosition = new Vector2(0f, y);
             yield return null;
         }
+    }
+
+    /// <summary>
+    /// 显示"点击任意位置退出游戏"提示，并原地等待玩家点击（鼠标左键 / 触摸）。
+    /// 提示文字照开场 IntroTitle 那样做透明度呼吸闪烁；全程 unscaledDeltaTime，暂停也照常跳。
+    /// 用"循环 + 每帧查一次输入"代替 WaitUntil：这样同一条协程里就能顺手做呼吸闪烁，不用另外加 Update。
+    /// </summary>
+    private IEnumerator WaitClickToQuit()
+    {
+        // 先显示提示（文字留空的话就只等点击、不显示东西）
+        if (quitPromptLabel != null && !string.IsNullOrEmpty(quitPrompt))
+        {
+            quitPromptLabel.text = quitPrompt;
+            quitPromptLabel.gameObject.SetActive(true);
+        }
+
+        float t = 0f;
+        while (!Input.GetMouseButtonDown(0))
+        {
+            t += Time.unscaledDeltaTime;
+            if (quitPromptLabel != null && quitPromptLabel.gameObject.activeSelf)
+            {
+                // sin 输出 -1~1，先映射到 0~1，再用 Lerp 夹到 0.4~1.0 之间来回"呼吸"
+                float a = Mathf.Lerp(0.4f, 1f, 0.5f + 0.5f * Mathf.Sin(t * quitPromptPulseSpeed));
+                Color c = quitPromptLabel.color;
+                c.a = a;
+                quitPromptLabel.color = c;
+            }
+            yield return null;
+        }
+
+        // 点下去瞬间把提示钉成全亮，给个"确实按到了"的反馈
+        if (quitPromptLabel != null) quitPromptLabel.color = new Color(1f, 1f, 1f, 1f);
+    }
+
+    /// <summary>
+    /// 真正退出游戏。
+    /// ⚠️ 关键：编辑器里 Application.Quit() 是【无效】的（编辑模式下它不退），必须用 UnityEditor.EditorApplication.isPlaying = false。
+    /// 所以用 #if UNITY_EDITOR 隔开：#else 分支才是打包后真正跑的 Application.Quit()。
+    /// </summary>
+    private void QuitGame()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false; // 编辑器里"停止播放"，等效于退出游戏
+#else
+        Application.Quit(); // 打包后的真机/PC 上真正退出
+#endif
     }
 
     // ============================ 小工具 ============================
@@ -407,6 +477,27 @@ public class EndingScene : MonoBehaviour
         cr.anchoredPosition = new Vector2(0f, 0f);
         cr.sizeDelta = new Vector2(1500f, 100f); // 高度稍后按 preferredHeight 动态设
         creditsLabel.gameObject.SetActive(false); // 滚动阶段才显示
+
+        // ── 退出提示（白字，屏幕中下方；落幕滚完之后才显示，平时隐藏） ──
+        // ★ 放在最后一个子物体：渲染层最上，压在滚动字幕之上
+        GameObject promptGO = new GameObject("QuitPrompt", typeof(RectTransform));
+        promptGO.transform.SetParent(canvasGO.transform, false);
+        quitPromptLabel = promptGO.AddComponent<Text>();
+        quitPromptLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        quitPromptLabel.fontSize = 40;
+        quitPromptLabel.color = Color.white;               // 正文白字
+        quitPromptLabel.alignment = TextAnchor.MiddleCenter;
+        quitPromptLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+        quitPromptLabel.verticalOverflow = VerticalWrapMode.Overflow;
+        quitPromptLabel.raycastTarget = false;
+        AddOutlineShadow(promptGO);                        // 黑描边 + 投影，黑屏上也看得清
+        RectTransform pr = quitPromptLabel.rectTransform;
+        pr.anchorMin = new Vector2(0.5f, 0f);              // 锚在屏幕底部
+        pr.anchorMax = new Vector2(0.5f, 0f);
+        pr.pivot = new Vector2(0.5f, 0.5f);
+        pr.anchoredPosition = new Vector2(0f, 160f);       // 距屏幕底 160 像素
+        pr.sizeDelta = new Vector2(1200f, 80f);
+        quitPromptLabel.gameObject.SetActive(false);       // 落幕结束前不显示
     }
 
     /// <summary> 给文字加黑描边 + 投影（照 DialogueManager.CreateSkipHint 的写法） </summary>

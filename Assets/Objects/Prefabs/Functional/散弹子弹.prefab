@@ -107,7 +107,7 @@ MonoBehaviour:
   addToInventory: 1
   isKeyItem: 1
   pickupRange: 2
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: 1f51e1c60a27f8443beb0c9f46d9ef5a, type: 3}
   pickupVolume: 1
   gunData: {fileID: 0}
   ammoType: 2

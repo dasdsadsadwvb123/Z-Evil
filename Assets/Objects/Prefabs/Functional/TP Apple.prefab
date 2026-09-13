@@ -74,7 +74,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 2
+  m_SortingOrder: -1
   m_Sprite: {fileID: 7293598183456022363, guid: 1ddc9afd21fec77489b1248d18f31b68, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -150,6 +150,14 @@ MonoBehaviour:
   interactKey: 102
   promptFontSize: 50
   promptColor: {r: 1, g: 1, b: 1, a: 1}
+  startLocked: 0
+  lockedPromptText: "\u673A\u5173\u672A\u6FC0\u6D3B\uFF0C\u51FA\u53E3\u88AB\u9501\u4F4F\u4E86\u2026\u2026"
+  requireKey: 0
+  keySlot: 0
+  roomName: 
+  fMessage: 
+  gemDoor: {fileID: 0}
+  stuck: 0
   needBreach: 0
   breachCount: 4
   breachSound: {fileID: 0}

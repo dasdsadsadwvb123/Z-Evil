@@ -355,6 +355,12 @@ public class Inventory : MonoBehaviour
         public string materialA_ID = "GreenHerb";
         public string materialB_ID = "RedHerb";
 
+        [Header("材料类型（推荐填：填了就按『草药类型』匹配——草药叫什么 ID 都能合）")]
+        [Tooltip("材料A 的草药类型：填 Green / Red / Mixed 就按类型匹配（推荐）。留 None = 自动从 materialA_ID 名字推断，仍推断不出才退回按 itemID 精确匹配")]
+        public HerbType materialA_HerbType = HerbType.None;
+        [Tooltip("材料B 的草药类型：填 Green / Red / Mixed 就按类型匹配（推荐）。留 None = 自动从 materialB_ID 名字推断，仍推断不出才退回按 itemID 精确匹配")]
+        public HerbType materialB_HerbType = HerbType.None;
+
         [Header("产物")]
         public string resultID = "MixedHerb";
         public string resultName = "红绿草";
@@ -392,8 +398,8 @@ public class Inventory : MonoBehaviour
         List<CombineRecipe> available = new List<CombineRecipe>();
         foreach (CombineRecipe r in recipes)
         {
-            if (HasItem(r.materialA_ID) && HasItem(r.materialB_ID))
-                available.Add(r);
+            int a, b;
+            if (TryFindMaterials(r, out a, out b)) available.Add(r);
         }
         return available;
     }
@@ -414,10 +420,9 @@ public class Inventory : MonoBehaviour
     {
         if (recipe == null) return false;
 
-        // 找两种材料在背包里的位置
-        int idxA = FindItemIndex(recipe.materialA_ID);
-        int idxB = FindItemIndex(recipe.materialB_ID);
-        if (idxA < 0 || idxB < 0) return false; // 材料不够
+        // 找两种材料在背包里的位置（按草药类型匹配，ID 兜底）
+        int idxA, idxB;
+        if (!TryFindMaterials(recipe, out idxA, out idxB)) return false; // 材料不够
 
         // 消耗材料（注意先删索引大的，避免删除后索引错位）
         if (idxB > idxA)
@@ -459,5 +464,59 @@ public class Inventory : MonoBehaviour
             if (items[i].itemID == itemID) return i;
         }
         return -1;
+    }
+
+    // ======== 草药类型匹配（修："地上的红/绿草 ID 统一成 Herb_Green_or_red_XX，看不出红绿"导致配方凑不齐） ========
+
+    /// <summary>
+    /// 解析材料的"草药类型"：优先用 Inspector 显式填的；没填就从 materialID 名字推断
+    /// （含 green→Green、含 red→Red、含 mixed→Mixed）。都推不出 → None（退回按 itemID 精确匹配）。
+    /// 兜底的存在意义：小泽场景里已有的配方新字段都是 None，靠推断才能零配置生效。
+    /// </summary>
+    private HerbType ResolveMaterialHerbType(HerbType declared, string materialID)
+    {
+        if (declared != HerbType.None) return declared;       // Inspector 显式填了 → 用它
+        if (string.IsNullOrEmpty(materialID)) return HerbType.None;
+
+        string s = materialID.ToLowerInvariant();
+        if (s.Contains("green")) return HerbType.Green;
+        if (s.Contains("red")) return HerbType.Red;
+        if (s.Contains("mixed")) return HerbType.Mixed;
+        return HerbType.None;                                  // 推不出 → 退回精确 ID 匹配
+    }
+
+    /// <summary> 找材料：先按草药类型匹配（与 ID 无关），找不到再退回按 itemID 精确匹配；excludeIndex 用于排除已被另一种材料占用的格子 </summary>
+    private int FindMaterialIndex(string materialID, HerbType type, int excludeIndex)
+    {
+        if (type != HerbType.None)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (i == excludeIndex) continue;
+                InventoryItem it = items[i];
+                if (it.itemType == ItemType.Herb && it.herbType == type) return i;
+            }
+        }
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (i == excludeIndex) continue;
+            if (items[i].itemID == materialID) return i;
+        }
+        return -1;
+    }
+
+    /// <summary> 配方能不能凑齐两种材料；返回两件材料在背包里的索引（保证是两个不同格子） </summary>
+    private bool TryFindMaterials(CombineRecipe r, out int idxA, out int idxB)
+    {
+        idxA = -1; idxB = -1;
+        if (r == null) return false;
+
+        HerbType ta = ResolveMaterialHerbType(r.materialA_HerbType, r.materialA_ID);
+        HerbType tb = ResolveMaterialHerbType(r.materialB_HerbType, r.materialB_ID);
+
+        idxA = FindMaterialIndex(r.materialA_ID, ta, -1);
+        if (idxA < 0) return false;
+        idxB = FindMaterialIndex(r.materialB_ID, tb, idxA);   // ★ 排除 A 已占用的格子，防同一株被当两种材料
+        return idxB >= 0;
     }
 }
