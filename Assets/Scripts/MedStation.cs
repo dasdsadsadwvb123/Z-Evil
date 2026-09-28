@@ -27,9 +27,19 @@ public class MedStation : MonoBehaviour
     private HealthSystem playerHealth; // 玩家血量系统（按 F 时懒查找）
     private Inventory playerInventory; // 玩家背包（借它的 OnItemNotice 通道发底部提示 toast）
     private GameObject promptUI;       // "按 F 使用医疗箱"提示（照 Cabinet 的轻量提示套路）
+    private string worldKey;           // 世界进度表钥匙（记录"这个医疗箱已用掉"，读档后不再复活）
 
     private void Start()
     {
+        // 读档自查：存档时这个医疗箱已经用掉了 → 直接消失，不建提示 UI
+        // （worldKey = MedStation_场景名_层级路径，和 DoorLock 等同一套惯例）
+        worldKey = WorldState.KeyFor("MedStation", this);
+        if (WorldState.GetBool(worldKey))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         GameObject p = GameObject.FindGameObjectWithTag("Player");
         if (p != null) player = p.transform;
         else Debug.LogWarning("[医疗箱] 场景里没有 Player 标签的物体，没人能用我", gameObject);
@@ -44,7 +54,7 @@ public class MedStation : MonoBehaviour
         bool near = Vector2.Distance(transform.position, player.position) <= interactRange;
         if (promptUI != null) promptUI.SetActive(near);
 
-        if (near && Input.GetKeyDown(KeyCode.F))
+        if (near && WorldInteractionBlocker.GetKeyDown(KeyCode.F))
         {
             // 懒查找玩家血量系统（第一次按 F 时找，之后缓存）
             if (playerHealth == null)
@@ -80,6 +90,9 @@ public class MedStation : MonoBehaviour
 
             // 治疗音效（距离听声惯例）
             AudibleAudio.PlayAt(healClip, transform.position);
+
+            // 世界进度表登记"医疗箱已用掉"（读档后不再复活）——必须放在 Destroy 之前
+            WorldState.Set(worldKey, 1);
 
             // 一次性：用完就没有了
             Destroy(gameObject);

@@ -18,7 +18,7 @@ MonoBehaviour:
   range: 15
   icon: {fileID: -2116018990, guid: 0934841bf3b22ff45ae42a5882bcfe9f, type: 3}
   ammoType: 3
-  magSize: 7
+  magSize: 4
   maxDurability: 0
   meleeBoxDurabilityCost: 15
   pelletCount: 1

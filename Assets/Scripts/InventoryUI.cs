@@ -62,6 +62,7 @@ public class InventoryUI : MonoBehaviour
     private float uiScale = 1f;               // 实际生效的尺寸倍率（= inventoryScale），供格子内文字复用时用
     private int selectedIndex = 0;
     private bool isOpen = false;
+    public bool IsOpen { get { return isOpen; } }
     private List<GameObject> slotObjs = new List<GameObject>();
 
     // ======== 状态机：物品网格 → 操作菜单 → 合成面板 → 纸条列表 ========
@@ -509,7 +510,7 @@ public class InventoryUI : MonoBehaviour
         GameObject hint = new GameObject("Hint");
         hint.transform.SetParent(notesPanel.transform, false);
         Text hintText = hint.AddComponent<Text>();
-        hintText.text = "W/S 选择 | E 阅读 | Q 返回物品 | Tab 关闭";
+        hintText.text = ControlHints.Notes(journalKey, toggleKey);
         hintText.fontSize = 16;
         hintText.color = Color.gray;
         hintText.alignment = TextAnchor.MiddleCenter;
@@ -518,8 +519,8 @@ public class InventoryUI : MonoBehaviour
         hr.anchorMin = new Vector2(0.5f, 0f);
         hr.anchorMax = new Vector2(0.5f, 0f);
         hr.pivot = new Vector2(0.5f, 0f);
-        hr.anchoredPosition = new Vector2(0f, 12f);
-        hr.sizeDelta = new Vector2(rowW, 28f);
+        hr.anchoredPosition = new Vector2(0f, 6f);
+        hr.sizeDelta = new Vector2(rowW, 42f);
 
         notesPanel.SetActive(false);
     }
@@ -707,7 +708,7 @@ public class InventoryUI : MonoBehaviour
 
     private void Open()
     {
-        if (isOpen) return;
+        if (isOpen || TeleportManager.IsTeleporting) return;
         isOpen = true;
         Time.timeScale = 0f;
         uiState = UIState.Grid;
@@ -741,12 +742,14 @@ public class InventoryUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (isOpen) Time.timeScale = 1f;
         if (canvasObj != null) Destroy(canvasObj);
     }
 
     private void CreateUI()
     {
         canvasObj = new GameObject("InventoryCanvas");
+        WorldInteractionBlocker.Attach(canvasObj);
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 200;
@@ -832,17 +835,18 @@ public class InventoryUI : MonoBehaviour
         GameObject tip = new GameObject("Tip");
         tip.transform.SetParent(canvasObj.transform, false);
         Text tipText = tip.AddComponent<Text>();
-        tipText.text = "WASD 选择 | 空格 使用/合成 | E 使用宝石 | Q 切换纸条 | Tab 关闭";
-        tipText.fontSize = Mathf.RoundToInt(20f * scale); // 底部操作提示：随倍率放大，免得"格子大、字小"
+        tipText.text = ControlHints.Inventory(useKey, journalKey, toggleKey);
+        tipText.fontSize = 22;
         tipText.color = Color.white;
         tipText.alignment = TextAnchor.MiddleCenter;
         tipText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        tipText.raycastTarget = false;
         RectTransform tipRect = tip.GetComponent<RectTransform>();
         tipRect.anchorMin = new Vector2(0.5f, 0f);
         tipRect.anchorMax = new Vector2(0.5f, 0f);
-        tipRect.pivot = new Vector2(0.5f, 0.5f);
-        tipRect.anchoredPosition = new Vector2(0, 30f);
-        tipRect.sizeDelta = new Vector2(500f * scale, 40f); // 字号变大 → 提示行同步加宽，别被截断
+        tipRect.pivot = new Vector2(0.5f, 0f);
+        tipRect.anchoredPosition = new Vector2(0, 100f);
+        tipRect.sizeDelta = new Vector2(1040f, 90f);
 
         // ===== 物品信息区：移进面板左栏，铺米白底板 + 黑字（不再压着游戏画面） =====
         CreateInfoBoard(panelW, infoW, viewH, pad, scale);
@@ -948,7 +952,7 @@ public class InventoryUI : MonoBehaviour
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0, 0);
-        rect.sizeDelta = new Vector2(300, 180);
+        rect.sizeDelta = new Vector2(420, 220);
 
         menuOptionTexts.Clear();
         for (int i = 0; i < 3; i++)
@@ -967,6 +971,21 @@ public class InventoryUI : MonoBehaviour
             oRect.sizeDelta = new Vector2(280, 45);
             menuOptionTexts.Add(t);
         }
+        GameObject menuHint = new GameObject("Hint", typeof(RectTransform), typeof(Text));
+        menuHint.transform.SetParent(menuPanel.transform, false);
+        Text menuHintText = menuHint.GetComponent<Text>();
+        menuHintText.text = "W/S / ↑↓ 选择 · " + ControlHints.Key(useKey) + " 确认 · Esc 返回";
+        menuHintText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        menuHintText.fontSize = 18;
+        menuHintText.color = Color.white;
+        menuHintText.alignment = TextAnchor.MiddleCenter;
+        menuHintText.raycastTarget = false;
+        RectTransform menuHintRect = menuHint.GetComponent<RectTransform>();
+        menuHintRect.anchorMin = new Vector2(0f, 0f);
+        menuHintRect.anchorMax = new Vector2(1f, 0f);
+        menuHintRect.pivot = new Vector2(0.5f, 0f);
+        menuHintRect.anchoredPosition = new Vector2(0f, 8f);
+        menuHintRect.sizeDelta = new Vector2(-16f, 32f);
         menuPanel.SetActive(false);
     }
 
@@ -1023,7 +1042,7 @@ public class InventoryUI : MonoBehaviour
         GameObject hint = new GameObject("Hint");
         hint.transform.SetParent(combinePanel.transform, false);
         Text hintText = hint.AddComponent<Text>();
-        hintText.text = "W/S 选择 | 空格 合成 | Esc 返回";
+        hintText.text = "W/S / ↑↓ 选择 | " + ControlHints.Key(useKey) + " 合成 | Esc 返回";
         hintText.fontSize = 16;
         hintText.color = Color.gray;
         hintText.alignment = TextAnchor.MiddleCenter;

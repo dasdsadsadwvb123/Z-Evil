@@ -76,7 +76,7 @@ public class CinematicIntro : MonoBehaviour
             inspectPromptUI.text = inspectPrompt;
             inspectPromptUI.gameObject.SetActive(true);
         }
-        yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.F));
+        yield return new WaitUntil(() => WorldInteractionBlocker.GetKeyDown(KeyCode.F));
         if (inspectPromptUI != null)
             inspectPromptUI.gameObject.SetActive(false);
 

@@ -88,7 +88,7 @@ public class AllergyMatchBoard : MonoBehaviour
             if (promptTextUI != null) promptTextUI.text = "按F 检查配药板";
         }
 
-        if (near && Input.GetKeyDown(KeyCode.F))
+        if (near && WorldInteractionBlocker.GetKeyDown(KeyCode.F))
         {
             AllergyMatchUI.Open(this); // 打开配对谜题（界面自己管暂停/拖线/判定）
         }

@@ -102,14 +102,14 @@ public class SavePoint : MonoBehaviour
             promptText.text = savePrompt + "    " + loadPrompt;
 
             // F 存档
-            if (Input.GetKeyDown(saveKey))
+            if (WorldInteractionBlocker.GetKeyDown(saveKey))
             {
                 saveSystem.SaveGame(this); // 传入自己：读档时玩家会回到这个存档点的坐标
                 ShowSavedFeedback();
             }
 
             // R 读档
-            if (Input.GetKeyDown(loadKey))
+            if (WorldInteractionBlocker.GetKeyDown(loadKey))
                 saveSystem.LoadGame();
         }
         else

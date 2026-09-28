@@ -27,6 +27,7 @@ public class NoteReaderUI : MonoBehaviour
     private GameObject canvasObj;
     private Text titleText;
     private Text bodyText;
+    private Text hintText;
 
     /// <summary> 打开阅读面板（旧路径：无 owner，合上 = 联动关背包回游戏） </summary>
     public static void Open(string title, string text)
@@ -57,6 +58,9 @@ public class NoteReaderUI : MonoBehaviour
 
         if (titleText != null) titleText.text = string.IsNullOrEmpty(title) ? "纸条" : title;
         if (bodyText != null) bodyText.text = text;
+        hintText.text = owner != null
+            ? "E / F / Esc 返回纸条列表 · Tab 关闭回游戏"
+            : "E / F / Esc / Tab 合上纸条，回到游戏";
         canvasObj.SetActive(true);
     }
 
@@ -65,6 +69,7 @@ public class NoteReaderUI : MonoBehaviour
     private void CreateUI()
     {
         canvasObj = new GameObject("NoteReaderCanvas");
+        WorldInteractionBlocker.Attach(canvasObj);
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 320; // 压过背包 200 / 柜子 250 / 密码面板 305
@@ -155,8 +160,7 @@ public class NoteReaderUI : MonoBehaviour
         // 底部操作提示（灰字）
         GameObject hintGO = new GameObject("Hint", typeof(RectTransform));
         hintGO.transform.SetParent(paper.transform, false);
-        Text hintText = hintGO.AddComponent<Text>();
-        hintText.text = "Esc / F / E 合上纸条（回到纸条列表）";
+        hintText = hintGO.AddComponent<Text>();
         hintText.fontSize = 15;
         hintText.color = new Color(0.45f, 0.45f, 0.45f);
         hintText.alignment = TextAnchor.MiddleCenter;
@@ -166,8 +170,8 @@ public class NoteReaderUI : MonoBehaviour
         hintRect.anchorMin = new Vector2(0.5f, 0f);
         hintRect.anchorMax = new Vector2(0.5f, 0f);
         hintRect.pivot = new Vector2(0.5f, 0.5f);
-        hintRect.anchoredPosition = new Vector2(0f, 20f);
-        hintRect.sizeDelta = new Vector2(500f, 26f);
+        hintRect.anchoredPosition = new Vector2(0f, 22f);
+        hintRect.sizeDelta = new Vector2(500f, 32f);
     }
 
     // ======== 关闭 ========

@@ -228,7 +228,7 @@ public class Container : MonoBehaviour
                     : (type == ContainerType.Cabinet ? "按F打开柜子" : "按F打开箱子");
         }
 
-        if (near && Input.GetKeyDown(KeyCode.F))
+        if (near && WorldInteractionBlocker.GetKeyDown(KeyCode.F))
         {
             // 密码锁：没解开时按 F 不开柜，弹密码面板（输对一次永记，之后走正常开柜）
             if (requirePassword && !unlocked)

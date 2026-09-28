@@ -65,7 +65,7 @@ public class BoardNotice : MonoBehaviour
         }
 
         // 按 F 切换：没展开 → 展开公告；已展开 → 收起
-        if (Input.GetKeyDown(KeyCode.F))
+        if (!WorldInteractionBlocker.IsBlockedExcept(noticeCanvas) && Input.GetKeyDown(KeyCode.F))
         {
             if (noticeVisible) HideNotice();
             else ShowNotice();
@@ -136,6 +136,7 @@ public class BoardNotice : MonoBehaviour
         bodyRect.offsetMax = new Vector2(-14f, -10f);
 
         noticeCanvas.SetActive(false); // 出生先藏好，按 F 才展开
+        WorldInteractionBlocker.Attach(noticeCanvas);
     }
 
     // ======== 牌名提示（屏幕空间，配药板同款轻量套路） ========

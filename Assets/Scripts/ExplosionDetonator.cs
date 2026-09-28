@@ -42,7 +42,7 @@ public class ExplosionDetonator : MonoBehaviour
         bool near = Vector2.Distance(transform.position, player.position) <= interactRange;
         if (promptUI != null) promptUI.SetActive(near);
 
-        if (near && Input.GetKeyDown(KeyCode.F))
+        if (near && WorldInteractionBlocker.GetKeyDown(KeyCode.F))
         {
             TriggerExplosion();
         }

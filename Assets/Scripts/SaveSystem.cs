@@ -47,6 +47,7 @@ public class SaveSystem : MonoBehaviour
         public List<SaveItemData> items;  // 背包物品（转换成可存文字的版本）
         public List<string> collectedItems; // 已拾取物品的 ID（场景重载后这些物品不复活）
         public List<WorldState.Entry> worldState; // 世界进度表（门/机关/怪死亡……）
+        public GemAmbushSystem.SavedState sawState;
     }
 
     [System.Serializable]
@@ -70,6 +71,7 @@ public class SaveSystem : MonoBehaviour
     // 场景重载会销毁本脚本实例，但 static 字段属于"类"不属于"实例"，销毁了也还在。
     // 新场景的实例会在 Awake 里先恢复 WorldState/已拾取清单，Update 第一帧再恢复玩家数据。
     private static SaveData pendingData = null;
+    public static bool IsRestoring { get { return pendingData != null; } }
     private bool restoreChecked = false; // 保证恢复逻辑只跑一次
 
     // ======== 已拾取物品清单（防复活/防刷物品） ========
@@ -200,6 +202,9 @@ public class SaveSystem : MonoBehaviour
 
         // 5. 世界进度表（门/机关/宝石/倒计时/怪死亡……整张表打包）
         data.worldState = WorldState.Snapshot();
+        data.sawState = GemAmbushSystem.Instance != null
+            ? GemAmbushSystem.Instance.CaptureSaveState()
+            : new GemAmbushSystem.SavedState();
 
         // 6. 序列化成 JSON 字符串，写成 UTF-8 文件。
         // 注意：不用 PlayerPrefs——它在 Windows 上存注册表，中文会损坏！
@@ -379,6 +384,9 @@ public class SaveSystem : MonoBehaviour
         }
 
         // 5. 已拾取清单：已在 Awake「覆盖」恢复（不是合并），这里不再处理。
+
+        if (GemAmbushSystem.Instance != null)
+            GemAmbushSystem.Instance.RestoreSaveState(data.sawState);
 
         Debug.Log("[读档] 恢复完成！场景 " + data.sceneName + "，存档点[" + data.savePointId + "]，血量 " + data.currentHealth);
     }

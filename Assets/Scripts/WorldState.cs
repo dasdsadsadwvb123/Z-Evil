@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 世界进度登记表（新增，零挂载——不用挂到任何物体上，纯静态工具）。
@@ -10,7 +11,7 @@ using UnityEngine;
 ///
 /// 钥匙格式：类型_场景名_物体层级路径（例如 Door_大厅_门/Door01）。
 /// 用"层级路径"而不是单纯物体名，是为了防止一个场景里有多个重名物体（比如好几个 Door）
-/// 互相覆盖——重名物体会自动带上父物体路径，永不撞车。
+/// 互相覆盖。同一父物体下仍重名的节点，按加载时的同名顺序加编号并缓存。
 ///
 /// 值全部是 int：0/1 表示"没有/有"（GetBool），也能存 2、3（比如暴君 1=假死、2=真死）。
 /// </summary>
@@ -26,6 +27,7 @@ public static class WorldState
 
     // 登记表本体：Key = 钥匙字符串，Value = 状态整数
     private static readonly Dictionary<string, int> map = new Dictionary<string, int>();
+    private static readonly Dictionary<Transform, string> paths = new Dictionary<Transform, string>();
 
     // ======== 编辑器友好：每次进 Play 自动清空登记表 ========
     // （关闭"域重载"时，静态字段会残留上一次 Play 的数据；这里强制开局归零，杜绝串档）
@@ -33,6 +35,9 @@ public static class WorldState
     private static void ResetStaticsOnPlay()
     {
         map.Clear();
+        paths.Clear();
+        SceneManager.sceneLoaded -= CacheLoadedScene;
+        SceneManager.sceneLoaded += CacheLoadedScene;
     }
 
     // ======== 钥匙生成 ========
@@ -58,14 +63,49 @@ public static class WorldState
     /// <summary> 取物体的层级路径（父/子/孙），用于生成唯一钥匙 </summary>
     private static string HierarchyPath(Transform t)
     {
-        string path = t.name;
-        Transform cur = t.parent;
-        while (cur != null)
+        if (!paths.ContainsKey(t)) CacheScenePaths(t.gameObject.scene);
+        if (paths.TryGetValue(t, out string path)) return path;
+        return t.name;
+    }
+
+    private static void CacheLoadedScene(Scene scene, LoadSceneMode mode)
+    {
+        var removed = new List<Transform>();
+        foreach (var entry in paths)
+            if (entry.Key == null) removed.Add(entry.Key);
+        foreach (Transform t in removed) paths.Remove(t);
+
+        // sceneLoaded 早于 Start：医疗箱/拾取物销毁之前固定全部编号。
+        CacheScenePaths(scene);
+    }
+
+    private static void CacheScenePaths(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded) return;
+        var roots = new List<Transform>();
+        foreach (GameObject root in scene.GetRootGameObjects()) roots.Add(root.transform);
+        CacheSiblings(roots, "");
+    }
+
+    private static void CacheSiblings(List<Transform> siblings, string parentPath)
+    {
+        var counts = new Dictionary<string, int>();
+        var ordinals = new Dictionary<string, int>();
+        foreach (Transform t in siblings)
+            counts[t.name] = counts.TryGetValue(t.name, out int n) ? n + 1 : 1;
+
+        foreach (Transform t in siblings)
         {
-            path = cur.name + "/" + path;
-            cur = cur.parent;
+            int ordinal = ordinals.TryGetValue(t.name, out int n) ? n : 0;
+            ordinals[t.name] = ordinal + 1;
+            string segment = counts[t.name] > 1 ? t.name + "#" + ordinal : t.name;
+            if (!paths.ContainsKey(t))
+                paths[t] = parentPath + segment;
+
+            var children = new List<Transform>();
+            foreach (Transform child in t) children.Add(child);
+            CacheSiblings(children, paths[t] + "/");
         }
-        return path;
     }
 
     // ======== 读写 ========

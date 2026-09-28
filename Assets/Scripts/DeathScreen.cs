@@ -76,6 +76,7 @@ public class DeathScreen : MonoBehaviour
     private void CreateDeathUI()
     {
         deathUI = new GameObject("DeathScreen");
+        WorldInteractionBlocker.Attach(deathUI);
         Canvas canvas = deathUI.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 400; // 盖在所有 UI 最上面

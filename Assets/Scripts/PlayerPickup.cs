@@ -81,7 +81,7 @@ public class PlayerPickup : MonoBehaviour
             if (promptTextUI != null)
                 promptTextUI.color = nearestItem.isKeyItem ? new Color(1f, 0.85f, 0.3f) : Color.white;
 
-            if (Input.GetKeyDown(interactKey))
+            if (WorldInteractionBlocker.GetKeyDown(interactKey))
             {
                 // 拾取音效：物品专属音效优先，否则用玩家默认音效（两者都没拖 = 静音，不报错）；走距离听声惯例
                 AudioClip clip = nearestItem.pickupClip != null ? nearestItem.pickupClip : defaultPickupClip;

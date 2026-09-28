@@ -48,6 +48,7 @@ public class DialogueManager : MonoBehaviour
 
     void Start()
     {
+        WorldInteractionBlocker.Attach(dialoguePanel);
         CreateSkipHint();
     }
 
@@ -135,6 +136,7 @@ public class DialogueManager : MonoBehaviour
 
     private IEnumerator PlayGroupRoutine(int groupIndex)
     {
+        WorldInteractionBlocker.Attach(dialoguePanel);
         isPlaying = true;
         DialogueGroup group = dialogueGroups[groupIndex];
 

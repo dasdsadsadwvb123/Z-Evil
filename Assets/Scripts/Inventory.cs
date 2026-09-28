@@ -42,8 +42,8 @@ public class Inventory : MonoBehaviour
         {
             items = savedItems;
             equippedIndex = savedEquipped;
-            savedItems = null;
-            savedEquipped = -1;
+            // 接收后继续保留快照：没有拾取/换装也能连续通过下一张场景。
+            SaveState();
         }
     }
 
@@ -335,7 +335,7 @@ public class Inventory : MonoBehaviour
         items.RemoveAt(index);
 
         // 修正装备索引：如果删的是装备中的枪
-        if (equippedIndex >= items.Count) equippedIndex = -1;
+        if (equippedIndex == index) equippedIndex = -1;
         else if (equippedIndex > index) equippedIndex--;
 
         SaveState();

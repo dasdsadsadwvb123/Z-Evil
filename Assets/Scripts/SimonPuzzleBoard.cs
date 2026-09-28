@@ -62,7 +62,7 @@ public class SimonPuzzleBoard : MonoBehaviour
             if (promptTextUI != null) promptTextUI.text = "按F 检查除颤仪";
         }
 
-        if (near && Input.GetKeyDown(KeyCode.F))
+        if (near && WorldInteractionBlocker.GetKeyDown(KeyCode.F))
         {
             SimonPuzzleUI.Open(this); // 打开谜题（界面自己管暂停/关闭/轮次）
         }

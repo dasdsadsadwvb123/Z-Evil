@@ -91,6 +91,7 @@ public class AllergyMatchUI : MonoBehaviour
         if (canvasObj != null) Destroy(canvasObj);
 
         canvasObj = new GameObject("AllergyMatchCanvas", typeof(RectTransform));
+        WorldInteractionBlocker.Attach(canvasObj);
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 305; // 密码面板/除颤仪同级（压过柜子 250 / 背包 200）

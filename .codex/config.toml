@@ -1,0 +1,8 @@
+[mcp_servers.mcp-unity]
+command = "C:/Users/31748/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe"
+args = ["Library/PackageCache/com.gamelovers.mcp-unity@382a43a30f/Server~/build/index.js"]
+enabled_tools = ["get_scene_info", "get_scenes_hierarchy", "get_gameobject", "get_play_mode_status", "get_console_logs"]
+
+[mcp_servers.mcp-unity.env]
+UNITY_HOST = "127.0.0.1"
+MCP_UNITY_AUTH_TOKEN_PATH = "Library/McpUnity/bridge-token"

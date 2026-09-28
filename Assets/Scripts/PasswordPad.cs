@@ -176,6 +176,7 @@ public class PasswordPad : MonoBehaviour
 
         // 面板总根（全屏容器，开/关只切换它）
         panelObj = new GameObject("PadPanelRoot", typeof(RectTransform));
+        WorldInteractionBlocker.Attach(panelObj);
         panelObj.transform.SetParent(canvasObj.transform, false);
         RectTransform rootRect = panelObj.GetComponent<RectTransform>();
         rootRect.anchorMin = Vector2.zero;

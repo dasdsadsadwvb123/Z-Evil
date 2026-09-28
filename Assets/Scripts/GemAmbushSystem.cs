@@ -67,6 +67,54 @@ public class GemAmbushSystem : MonoBehaviour
     private const string KeyPink = "Ambush_Pink";
     private const string KeyOrange = "Ambush_Orange";
 
+    [System.Serializable]
+    public class SavedState
+    {
+        public bool exists;
+        public BossSawAI.SavedState actor;
+    }
+
+    public SavedState CaptureSaveState()
+    {
+        bool alive = !sawDead && saw != null;
+        return new SavedState { exists = alive, actor = alive ? saw.CaptureSaveState() : null };
+    }
+
+    public void RestoreSaveState(SavedState state)
+    {
+        StopAllCoroutines();
+        RemoveSaw();
+        RestoreFromWorldState();
+        lastHadRuby = lastHadPink = lastHadOrange = false;
+        playerInventory = null;
+        dialogueManager = null;
+        playerMovement = null;
+
+        if (sawDead) return;
+        if (state != null)
+        {
+            if (!state.exists || state.actor == null) return;
+            BossSawAI restored = EnsureSaw();
+            if (restored != null) restored.RestoreSaveState(state.actor);
+        }
+        else if (rubyTriggered || pinkTriggered || orangeTriggered)
+        {
+            // 旧档只有伏击标志：恢复唯一的存活追猎者到原有大厅刷新点。
+            BossSawAI restored = EnsureSaw();
+            if (restored != null) restored.RefreshAt(lobbyPos);
+        }
+    }
+
+    private void RemoveSaw()
+    {
+        if (saw == null) return;
+        HealthSystem hp = saw.GetComponent<HealthSystem>();
+        if (hp != null) hp.OnDeath -= OnSawDead;
+        saw.gameObject.SetActive(false); // Destroy 延迟到帧末，先停掉旧攻击/死亡协程。
+        Destroy(saw.gameObject);
+        saw = null;
+    }
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -93,12 +141,14 @@ public class GemAmbushSystem : MonoBehaviour
     {
         TeleportManager.OnAnyTeleport -= OnAnyTeleport;
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        if (Instance == this) Instance = null;
     }
 
     // ======== 宝石拾取监听（每帧轮询背包，从无到有的边沿触发） ========
 
     private void Update()
     {
+        if (SaveSystem.IsRestoring) return;
         if (sawDead) return; // 锯子死了：永久失效，什么都不再触发
 
         // 玩家背包懒查找：每场景的玩家是新实例 → 旧引用销毁后自动重找
@@ -239,6 +289,8 @@ public class GemAmbushSystem : MonoBehaviour
     /// <summary> 场景加载：锯子已死 → 尸体不再跨场景（销毁，玩家看不到新场景里有尸体）；并还原进度表 </summary>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        // 读档首帧之前停用旧追猎者，避免它先于玩家数据恢复执行攻击。
+        if (SaveSystem.IsRestoring) RemoveSaw();
         // 先按世界进度表还原（读档进来后 WorldState 已由 SaveSystem.Awake 恢复）
         RestoreFromWorldState();
     }
@@ -251,11 +303,10 @@ public class GemAmbushSystem : MonoBehaviour
         pinkTriggered = WorldState.GetBool(KeyPink);
         orangeTriggered = WorldState.GetBool(KeyOrange);
 
-        // 已死 → 尸体不再跨场景（销毁）
-        if (sawDead && saw != null)
+        // 已死或回到首次伏击之前：清理上一段进度里的实例。
+        if (sawDead || (!rubyTriggered && !pinkTriggered && !orangeTriggered))
         {
-            Destroy(saw.gameObject);
-            saw = null;
+            RemoveSaw();
         }
     }
 }

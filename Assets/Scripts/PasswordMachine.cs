@@ -97,7 +97,7 @@ public class PasswordMachine : MonoBehaviour
         if (inRange)
         {
             ShowPrompt(promptText, Color.white);
-            if (Input.GetKeyDown(interactKey))
+            if (WorldInteractionBlocker.GetKeyDown(interactKey))
                 OpenMachine();
         }
         else
@@ -306,6 +306,7 @@ public class PasswordMachine : MonoBehaviour
 
         // 输入面板总根（全屏容器，开/关只切换它）
         panelObj = new GameObject("MachinePanelRoot", typeof(RectTransform));
+        WorldInteractionBlocker.Attach(panelObj);
         panelObj.transform.SetParent(canvasObj.transform, false);
         RectTransform rootRect = panelObj.GetComponent<RectTransform>();
         rootRect.anchorMin = Vector2.zero;

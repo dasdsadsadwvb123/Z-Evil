@@ -109,6 +109,7 @@ public class ContainerUI : MonoBehaviour
         slotObjs.Clear();
 
         canvasObj = new GameObject("ContainerCanvas");
+        WorldInteractionBlocker.Attach(canvasObj);
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 250; // 压过玩家背包（200）
@@ -185,7 +186,7 @@ public class ContainerUI : MonoBehaviour
         GameObject tip = new GameObject("Tip");
         tip.transform.SetParent(canvasObj.transform, false);
         Text tipText = tip.AddComponent<Text>();
-        tipText.text = "点击物品取出 | W/S 选择 | F 取出 | TAB/ESC 关闭";
+        tipText.text = "W/S / ↑↓ 选择 · F / 空格 取出\n鼠标点击也可取出 · Tab / Esc 关闭";
         tipText.fontSize = Mathf.RoundToInt(18f * uiScale);
         tipText.color = Color.white;
         tipText.alignment = TextAnchor.MiddleCenter;
@@ -194,8 +195,8 @@ public class ContainerUI : MonoBehaviour
         tipRect.anchorMin = new Vector2(0.5f, 0f);
         tipRect.anchorMax = new Vector2(0.5f, 0f);
         tipRect.pivot = new Vector2(0.5f, 0.5f);
-        tipRect.anchoredPosition = new Vector2(0, 30f);
-        tipRect.sizeDelta = new Vector2(700f * uiScale, 40f); // 字号变大 → 提示行也加宽，别被截断
+        tipRect.anchoredPosition = new Vector2(0, 48f);
+        tipRect.sizeDelta = new Vector2(700f * uiScale, 76f);
 
         RefreshAll();
     }

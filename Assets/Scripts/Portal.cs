@@ -141,7 +141,10 @@ public class Portal : MonoBehaviour
 
     private void Update()
     {
-       if (playerInRange && Input.GetKeyDown(interactKey))
+        // 暂停界面打开时不处理门交互，避免带着暂停状态切换场景。
+        if (Time.timeScale <= 0f) return;
+
+       if (playerInRange && WorldInteractionBlocker.GetKeyDown(interactKey))
        {
             // 卡住的门：优先级最高的守卫——按 F 永远无效（抖动反馈"按了也没用"），压过板锁/宝石门/钥匙锁/传送
             if (stuck)

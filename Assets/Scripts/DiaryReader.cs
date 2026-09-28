@@ -138,6 +138,7 @@ public class DiaryReader : MonoBehaviour
 
         // 面板总根：全屏大小、默认隐藏，开/关只切换它
         panelObj = new GameObject("DiaryPanelRoot", typeof(RectTransform));
+        WorldInteractionBlocker.Attach(panelObj);
         panelObj.transform.SetParent(canvasObj.transform, false);
         RectTransform rootRect = panelObj.GetComponent<RectTransform>();
         rootRect.anchorMin = Vector2.zero;

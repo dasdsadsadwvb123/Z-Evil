@@ -99,7 +99,7 @@ public class DoorLock : MonoBehaviour
             bool hasKey = inventory != null && inventory.HasItem(requiredKeyID);
             ShowPrompt(hasKey ? promptText : lockedText, hasKey ? Color.white : new Color(1f, 0.45f, 0.4f));
 
-            if (Input.GetKeyDown(interactKey))
+            if (WorldInteractionBlocker.GetKeyDown(interactKey))
                 TryUnlock(hasKey);
         }
         else

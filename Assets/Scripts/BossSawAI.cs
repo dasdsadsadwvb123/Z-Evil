@@ -142,6 +142,81 @@ public class BossSawAI : MonoBehaviour
     private GameObject barRoot;
     private RectTransform fillRect;
 
+    [System.Serializable]
+    public class SavedState
+    {
+        public Vector2 position;
+        public Vector2 homePosition;
+        public Vector2 targetPosition;
+        public Vector2 patrolPosition;
+        public Vector2 facing;
+        public int health;
+        public int maxHealth;
+        public bool chasing;
+        public bool enraged;
+        public bool moving;
+        public bool hasPatrolTarget;
+        public float attackCooldownLeft;
+    }
+
+    private SavedState pendingRestore;
+
+    public SavedState CaptureSaveState()
+    {
+        if (pendingRestore != null) return pendingRestore;
+        CacheComponents();
+        return new SavedState
+        {
+            position = rb.position,
+            homePosition = homePos,
+            targetPosition = targetGridPos,
+            patrolPosition = patrolTarget,
+            facing = currentFacing,
+            health = myHealth != null ? myHealth.currentHealth : 1,
+            maxHealth = myHealth != null ? myHealth.maxHealth : 1,
+            chasing = hasSeenPlayer,
+            enraged = enraged,
+            moving = isMoving,
+            hasPatrolTarget = hasPatrolTarget,
+            attackCooldownLeft = Mathf.Max(0f, nextAttackTime - Time.time)
+        };
+    }
+
+    // 由读档创建的新实例使用；首个 Update 在全部 Start 之后恢复血量。
+    public void RestoreSaveState(SavedState state)
+    {
+        pendingRestore = state;
+    }
+
+    private void ApplyPendingRestore()
+    {
+        SavedState state = pendingRestore;
+        pendingRestore = null;
+        CacheComponents();
+        rb.position = state.position;
+        homePos = state.homePosition;
+        targetGridPos = state.targetPosition;
+        patrolTarget = state.patrolPosition;
+        currentFacing = state.facing;
+        hasSeenPlayer = state.chasing;
+        isMoving = state.moving;
+        hasPatrolTarget = state.hasPatrolTarget;
+        nextAttackTime = Time.time + state.attackCooldownLeft;
+        if (myHealth != null)
+        {
+            myHealth.maxHealth = Mathf.Max(1, state.maxHealth);
+            myHealth.currentHealth = Mathf.Clamp(state.health, 1, myHealth.maxHealth);
+        }
+        if (state.enraged && !enraged)
+        {
+            enraged = true;
+            chaseSpeed *= enrageSpeedMul;
+            patrolSpeed *= enrageSpeedMul;
+            attackCooldown *= enrageAttackMul;
+        }
+        SetIdleAnim();
+    }
+
     private void Start()
     {
         CacheComponents(); // 幂等补齐组件（宝石伏击系统 Instantiate 同帧调 RefreshAt 时，也走这里自愈）
@@ -252,7 +327,11 @@ public class BossSawAI : MonoBehaviour
 
     private void Update()
     {
+        if (pendingRestore != null) ApplyPendingRestore();
         if (dead) return;
+
+        // 跨场景保留的追猎者需要重新绑定新场景玩家。
+        if (player == null) CacheComponents();
 
         // 狂暴检查（一次性）
         if (!enraged && enableEnrage && myHealth != null && myHealth.maxHealth > 0)
@@ -314,6 +393,7 @@ public class BossSawAI : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (pendingRestore != null) return;
         if (dead || isAttacking) return;
         if (isMoving)
         {

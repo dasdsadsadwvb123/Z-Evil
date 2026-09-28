@@ -94,6 +94,7 @@ public class SimonPuzzleUI : MonoBehaviour
         if (canvasObj != null) Destroy(canvasObj);
 
         canvasObj = new GameObject("SimonPuzzleCanvas");
+        WorldInteractionBlocker.Attach(canvasObj);
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 305; // 密码面板同级（250 柜子 / 200 背包之上）
